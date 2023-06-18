@@ -1,6 +1,6 @@
 """
 ANC cleaning pipeline
-It loads aws json files, read the table information in each file and clean the contents.
+It loads the csv files, read the table information in each file and clean the contents.
 """
 
 from util.clean_utils import *
@@ -223,7 +223,7 @@ def clean_anc():
     anc.to_csv(f"{cleaned_data_path}/{final_name}.csv",
                 index=False, mode="w")
     anc["time_scheduled_cleaned"] = anc["time_scheduled_cleaned"].astype(str)
-    #anc.to_stata(f"{stata_path}/{final_name}.dta")
+    anc.to_stata(f"{stata_path}/{final_name}.dta")
     print("ANC cleaned!")
 
 
