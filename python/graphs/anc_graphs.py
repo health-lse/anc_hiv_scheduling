@@ -419,6 +419,7 @@ def anc_share_arrival_10(anc):
     plt.savefig(f"{img}/anc_after_10.jpeg", bbox_inches='tight',dpi=300)
 
 def gen_complier_graphs():
+    
     raise NotImplemented
 
 # Configs

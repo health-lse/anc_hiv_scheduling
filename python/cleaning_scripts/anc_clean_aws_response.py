@@ -8,6 +8,7 @@ import pandas as pd
 import numpy as np
 from os import listdir
 
+
 def get_csv_data(file_names):
     csv_data = pd.DataFrame()
     for csv in file_names:
@@ -284,7 +285,6 @@ aux = f"{lse}/anc_hiv_scheduling/data/aux"
 cleaned_files_path = f"{root}/files_to_review/csv_cleaned"
 cleaned_data_path = f"{root}/cleaned_data"
 stata_path = f"{lse}/anc_rct/data"
-
 
 def __init__():
     clean_anc()
