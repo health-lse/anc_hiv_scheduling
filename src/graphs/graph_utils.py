@@ -99,3 +99,34 @@ def time_diff(final_time, initial_time):
 def format_graph():
     plt.xticks(fontsize=8)
     plt.yticks(fontsize=8)
+
+
+def column_by_quantile(df, col, n_quantiles,n_round=2,format_int=True):
+    """
+        Divide the column in quantiles and generate a label
+    """
+    quantiles = np.linspace(0,1,n_quantiles+1)
+
+    conditions = []
+    labels = []
+    for i,q in enumerate(quantiles[0:(n_quantiles)]):
+        v = np.quantile(df[col], q)
+        v_next = np.quantile(df[col], quantiles[i+1])
+        
+        # if last, changes comparison to lower or equal
+        if i == n_quantiles-1:
+            conditions.append( (df[col] >= v) & (df[col] <= v_next) )
+        else:
+            conditions.append( (df[col] >= v) & (df[col] < v_next) )
+    
+        if format_int:
+            lower_bound = int(round(v,n_round))
+            upper_bound = int(round(v_next,n_round))
+        else:
+            lower_bound = round(v,n_round)
+            upper_bound = round(v_next,n_round)
+            
+        label = f"{lower_bound}-{upper_bound}"
+        labels.append(label)
+    
+    return np.select(conditions, labels),labels

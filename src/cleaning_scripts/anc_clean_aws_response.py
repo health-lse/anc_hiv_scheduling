@@ -3,7 +3,7 @@ ANC cleaning pipeline
 It loads the csv files, read the table information in each file and clean the contents.
 """
 
-from util.clean_utils import *
+from clean_utils import *
 import pandas as pd
 import numpy as np
 from os import listdir
@@ -204,6 +204,40 @@ def save_complier_data(anc):
 
     complier.to_stata(f"{stata_path}/complier.dta")
 
+def share_10(time_array):
+    """returns the percent of obs before 10"""
+    total_obs = len(time_array)
+    obs_before_10 = np.sum(np.where(time_array >= 1000, 1, 0))
+    
+    return obs_before_10 / total_obs
+
+
+def gen_open_hours_df(anc):
+    time_array = np.array([600, 800, 1000, 1050, 1200])
+    share_10(time_array)
+
+    open_h = (anc.groupby(["facility", "day","treatment","day_of_week"])
+    .agg({"time_entered":["first", "last",share_10],
+            "time_arrived":share_10})
+    .reset_index())
+    open_h["open"] = open_h["time_entered"]["first"]
+    open_h["close"] = open_h["time_entered"]["last"]
+    open_h["consultation_after_10"] = open_h["time_entered"]["share_10"]
+    open_h["arrived_after_10"] = open_h["time_arrived"]["share_10"]
+    open_h = open_h.drop("time_entered", axis=1)
+    open_h = open_h.drop("time_arrived", axis=1)
+
+    list_open = open_h['open'].to_list()
+    list_close = open_h['close'].to_list()
+    list_wt = []
+
+    for (open_, close) in  zip(list_open, list_close):
+        list_wt.append(time_diff(close, open_))
+
+    open_h["opening_time"] = list_wt
+    open_h.droplevel(1, axis=1).to_stata(f"{stata_path}//opening_time.dta")
+
+
 def clean_anc():
     # load csv files
     file_names = [f for f in listdir(cleaned_files_path) if "csv" in f]
@@ -218,18 +252,36 @@ def clean_anc():
     anc.loc[anc["facility"].isin([5,39]), "complier"] = 1
     save_complier_data(anc)
 
-    
+    anc["treatment_status"] = "treated"
+    anc.loc[anc["treatment"] == 0, "treatment_status"] = "control"
+
+    anc["reason"] = np.nan
+    anc.loc[anc["consultation_reason"] == 1, "reason"] = "1st visits"
+    anc.loc[anc["consultation_reason"] == 2, "reason"] = "Follow-up"
+
+    facility_characteristics = pd.read_stata(f"{aux}/facility_characteristics.dta")
+    facility_characteristics = facility_characteristics.drop("treatment", axis=1)
+    volume_baseline = pd.read_stata(f"{aux}/facility_volume_baseline.dta")
+
+    anc = anc.merge(facility_characteristics, left_on=["facility"],
+            right_on="facility_cod")
+    anc = anc.merge(volume_baseline, left_on="facility",
+          right_on="facility_cod")
+
     final_name = "anc_cpn_endline_v20230611"
     anc.to_csv(f"{cleaned_data_path}/{final_name}.csv",
                 index=False, mode="w")
     anc["time_scheduled_cleaned"] = anc["time_scheduled_cleaned"].astype(str)
-    anc.to_stata(f"{stata_path}/{final_name}.dta")
-    print("ANC cleaned!")
+    
+    #anc.to_stata(f"{stata_path}/{final_name}.dta")
 
+    gen_open_hours_df(anc)
+    print("ANC cleaned!")
 
 #PATHS
 lse = "/Users/rafaelfrade/arquivos/desenv/lse"
 root = "/Users/rafaelfrade/arquivos/desenv/lse/ocr"
+aux = f"{lse}/anc_hiv_scheduling/data/aux"
 cleaned_files_path = f"{root}/files_to_review/csv_cleaned"
 cleaned_data_path = f"{root}/cleaned_data"
 stata_path = f"{lse}/anc_rct/data"
