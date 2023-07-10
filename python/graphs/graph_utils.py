@@ -112,21 +112,39 @@ def column_by_quantile(df, col, n_quantiles,n_round=2,format_int=True):
     for i,q in enumerate(quantiles[0:(n_quantiles)]):
         v = np.quantile(df[col], q)
         v_next = np.quantile(df[col], quantiles[i+1])
-        
+
         # if last, changes comparison to lower or equal
         if i == n_quantiles-1:
             conditions.append( (df[col] >= v) & (df[col] <= v_next) )
         else:
             conditions.append( (df[col] >= v) & (df[col] < v_next) )
-    
+
         if format_int:
             lower_bound = int(round(v,n_round))
             upper_bound = int(round(v_next,n_round))
         else:
             lower_bound = round(v,n_round)
             upper_bound = round(v_next,n_round)
-            
+
         label = f"{lower_bound}-{upper_bound}"
         labels.append(label)
-    
+        
     return np.select(conditions, labels),labels
+
+ROOT = "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling/data"
+ROOT = "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling/data"
+
+cleaned_files_path = f"{ROOT}/anc/csv_cleaned"
+CLEANED_DATA_PATH = f"{ROOT}/cleaned_data"
+AUX = f"{ROOT}/aux"
+complier_df = pd.read_stata(f"{CLEANED_DATA_PATH}/complier.dta")
+facility_characteristics = pd.read_stata(f"{AUX}/facility_characteristics.dta")
+
+volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
+
+complier_df = complier_df.merge(facility_characteristics, on=["facility_cod", "treatment"])
+complier_df = complier_df.merge(volume_baseline, on=["facility_cod"])
+
+
+column_by_quantile(complier_df.query("index_ANC_readiness.notna()"),
+                   "index_ANC_readiness", 3, n_round=0,format_int=False)

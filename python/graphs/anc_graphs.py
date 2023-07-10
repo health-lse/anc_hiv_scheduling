@@ -120,26 +120,7 @@ def get_open_hours(df, arrival_time_col_name):
     return open_h
 
 
-def anc_hiv_opening_hours(hiv_endline, anc):
-    open_hiv = get_open_hours(hiv_endline, "arrival_time")
-    plt.figure(figsize=(6, 3))
-    plt.suptitle("Opening hours")
-    plt.subplot(1,2,1)
-    open_hiv["openting_time_hours"] = open_hiv["opening_time"]/60
-    sns.barplot(open_hiv,
-                x="treatment_status", y="openting_time_hours",
-                palette=palette_anc, errwidth=0.5, capsize=0.1,
-                order=order, errorbar=("se", 1.96))
-
-    plt.title("HIV", fontsize=10)
-    plt.xlabel(SOURCE_WT_FORMS  + "\n n=80 facilities, 12 days each", size=6)
-    plt.ylabel("time in hours", fontsize=8)
-    plt.ylim([0,4.3])
-    plt.yticks(range(0,5), fontsize=8)
-    plt.xticks(fontsize=8)
-
-    plt.subplot(1,2,2)
-    #open_h_anc = pd.read_stata(f"{lse}/anc_rct/data/opening_time.dta")
+def anc_hiv_opening_hours(anc):
     open_h_anc = get_open_hours(anc, "time_arrived")
 
     title = "ANC: Average opening hours"
@@ -162,7 +143,7 @@ def anc_hiv_opening_hours(hiv_endline, anc):
 # ANC: Avg Consultations per Patient
 def avg_consultations_per_patient(reg_book):
 
-    title = "ANC: Average consultations per patient"
+    title = "CPN: Média de consultas por paciente"
     sns.catplot(data=reg_book,
                 x="treatment_status", y="anc_total", kind="bar",
                 palette=palette_anc, errwidth=0.5, capsize=0.1,
@@ -170,7 +151,7 @@ def avg_consultations_per_patient(reg_book):
                 aspect=1, height=3)
     plt.title(title, fontsize=10)
 
-    xlabel = ("Increase of 14% in the average number \n of consultations per patient \n" +
+    xlabel = ("Increase of 14%-22% in the average number \n of consultations per patient \n" +
                 SOURCE_REG + "\n" +
             SIZE_REG_BOOK)
     plt.xlabel(xlabel, size=8)
@@ -231,12 +212,12 @@ def anc_het_wt_province(anc):
                     hue="treatment_status",palette=palette_anc,
                     hue_order=order,errwidth=0.5, capsize=0.1,
                     errorbar=("ci",95))
-    plt.xlabel("Time in minutes" + "\n" + SOURCE_WT_FORMS + "/SARA \n" + size_followup(anc),
+    plt.xlabel("Tempo em minutos" + "\n" + SOURCE_WT_FORMS + "/SARA \n" + size_followup(anc),
             size=8)
 
     plt.ylabel("")
     format_graph()
-    plt.title("ANC: Waiting time by province - follow-ups" ,fontsize=10)
+    plt.title("CPN: Tempo de espera por provincia - seguimento" ,fontsize=10)
     plt.xlim([30,160])
 
     #sns.move_legend(g, "lower right", ncol=2, title="", frameon=True)
@@ -248,7 +229,8 @@ def anc_het_wt_province(anc):
                     x="complier", y="province_label",
                     order=province_order,errwidth=0.5, capsize=0.1,
                     errorbar=("ci",95), color=TREATED)
-    plt.title("Percent of patients in complier clinics",size=10)
+    title = "Percentual dos pacientes em unidades sanitárias \n que efetivamente implementaram a marcação de consultas"
+    plt.title(title,size=10)
 
     plt.ylabel("")
     format_graph()
@@ -286,7 +268,6 @@ def anc_het_wt_vol(anc):
                 order=order_base_bol,
                 errwidth=0.5, capsize=0.1)
     plt.title("ANC: Percentage of patientes in complier facilities" ,fontsize=10)
-
     plt.xlabel("Baseline patients per month - SISMA \n" + SOURCE_WT_FORMS + size_followup(anc), size=8)
 
     #sns.move_legend(g, "lower center", ncol=2, title="", frameon=True)
@@ -325,16 +306,22 @@ def anc_het_arrival_province(anc):
 
 
 
-def anc_het_wt_urban(anc):
+def anc_het_wt_urban(anc, complier_df):
     followup = anc.query("consultation_reason == 2")
+
+    followup["urban_labeled"] = followup["urban"]
+    followup = followup.replace({"urban_labeled":{0:"rural", 1:"urbana"}})
+
+    order_urban = ["rural", "urbana"]
+
     plt.figure(figsize=(8, 3))
     plt.subplot(1, 2, 1)
-    g = sns.barplot(followup, x="urban",
+    g = sns.barplot(followup, x="urban_labeled",
                 y="waiting_time",
                 hue="treatment_status",
                 palette=palette_anc,
                 hue_order=order,errwidth=0.5, capsize=0.1)
-    plt.title("ANC: Waiting time in urban facilities \n (Followu-ps)" ,fontsize=10)
+    plt.title("CPN: Tempo de espera (Seguimento)" ,fontsize=10)
 
     plt.xlabel("Urban (SARA) \n" + SOURCE_WT_FORMS + "\n" + size_followup(anc), size=8)
     sns.move_legend(g, "lower center", ncol=2, title="", frameon=True)
@@ -343,16 +330,25 @@ def anc_het_wt_urban(anc):
     format_graph()
 
     plt.subplot(1, 2, 2)
-    g = sns.barplot(followup.query("treatment == 1"), x="complier",
-                y="urban", color=TREATED,
-                errwidth=0.5, capsize=0.1)
-    plt.title("ANC: Percentage of patientes in complier facilities" ,fontsize=10)
+    complier_df["urban_labeled"] = complier_df["urban"]
+    complier_df = complier_df.replace({"urban_labeled":{0:"rural", 1:"urbana"}})
 
-    plt.xlabel("Urban (SARA) \n" + SOURCE_WT_FORMS , size=8)
+    order_urban = ["rural", "urbana"]
+    sns.countplot(complier_df.query("treatment == 1"), x="urban_labeled", 
+                color=TREATED, order=order_urban, **dict(alpha=0.3))
+    ax = sns.countplot(complier_df.query("treatment == 1 & complier == 1"),
+                        x="urban_labeled", order=order_urban, color=TREATED)
+    ax.text(0, 13.3, "50%", ha='center', weight='bold')
+    ax.text(1, 13.3, "80%", ha='center',weight='bold')
 
-    #sns.move_legend(g, "lower center", ncol=2, title="", frameon=True)
+    title="CPN: Unidades que efetivamente implementaram \n a marcação de consultas"
+    plt.title(title ,fontsize=10)
+    plt.xlabel("40 unidades sanitárias de tratamento \n" + SOURCE_WT_FORMS, size=8)
+    sns.despine(left=True, bottom=True)
     plt.ylabel("Percentage of patientes", fontsize=8)
     format_graph()
+    plt.yticks([])
+    plt.ylabel("")
 
     plt.savefig(f"{img}/anc_het_wt_urban.jpeg", bbox_inches='tight',dpi=300)
 
@@ -418,9 +414,167 @@ def anc_share_arrival_10(anc):
     ax = coef_plot(values, sem, n, title, xlabel, xticks=[-0.1,0,0.1])
     plt.savefig(f"{img}/anc_after_10.jpeg", bbox_inches='tight',dpi=300)
 
-def gen_complier_graphs():
-    
-    raise NotImplemented
+def compliers_defiers_graph(complier_df):
+    plt.figure()
+    complier_df.loc[complier_df.eval("treatment == 0 & complier == 1"), "compliance_labeled"] = "Control"
+    complier_df.loc[complier_df.eval("treatment == 1 & complier == 1"), "compliance_labeled"] = "Treated"
+
+    order_complier_graph = ["Control", "Treated"]
+    ax = sns.countplot(complier_df, x="treatment", **dict(alpha=0.3), palette=palette_anc)
+    ax.text(0, 4, "3 / 39", ha='center', weight='bold')
+    ax.text(1, 28, "27 / 40", ha='center', weight='bold')
+
+    sns.countplot(complier_df, x="compliance_labeled",
+                palette=palette_anc, order=order_complier_graph)
+    plt.title("Treatment Compliance")
+    plt.xlabel(SOURCE_WT_FORMS + "\n Facilities: 40 treated and 39 control",
+                size=8)
+    sns.despine( bottom=True)
+    plt.yticks([0,20,40])
+    plt.ylabel("")
+    format_graph()
+    plt.savefig(f"{img}/compliers_defiers.jpeg", bbox_inches='tight',dpi=300)
+
+
+
+def complier_by_province(complier_df):
+    plt.figure()
+    sns.countplot(complier_df.query("treatment == 1"), x="province", 
+                color=TREATED,  **dict(alpha=0.3))
+    ax = sns.countplot(complier_df.query("treatment == 1 & complier == 1"),
+                        x="province", color=TREATED)
+    plt.title("Facilities that effectively implemented \n the scheduling system", size=10)
+
+    ax.text(0, 6.3, "6 / 8", ha='center', weight='bold')
+    ax.text(1, 10.3, "10 / 13", ha='center',weight='bold')
+    ax.text(2, 8.3, "8 / 14", ha='center', weight='bold')
+    ax.text(3, 3.3, "3 / 5", ha='center', weight='bold')
+
+    sns.despine(left=True, bottom=True)
+    format_graph()
+    plt.yticks([])
+    plt.ylabel("")
+    plt.xlabel("")
+    plt.savefig(f"{img}/compliers_by_province.jpeg", bbox_inches='tight', dpi=300)
+
+
+def complier_by_volume(complier_df):
+    plt.figure()
+    base_vol,labels_base_vol = column_by_quantile(complier_df, "volume_base_total", 3,
+                                            n_round=0,format_int=False)
+    complier_df["base_vol"] = base_vol
+    complier_df["base_vol"] = complier_df["base_vol"].str.replace(".0","")
+
+    order_base_bol=["82-269", "269-416", "416-1603"]
+
+    sns.countplot(complier_df.query("treatment == 1"), x="base_vol", 
+                color=TREATED,  order=order_base_bol, **dict(alpha=0.3))
+    ax = sns.countplot(complier_df.query("treatment == 1 & complier == 1"),
+                        x="base_vol", order=order_base_bol, color=TREATED)
+
+    ax.text(0, 9.3, "9 / 14", ha='center', weight='bold')
+    ax.text(1, 8.3, "8 / 12", ha='center',weight='bold')
+    ax.text(2, 9.3, "9 / 13", ha='center', weight='bold')
+
+    plt.title("ANC: Number of complying facilities by volume" ,fontsize=10)
+    plt.xlabel("Baseline patients per month - SISMA (40 treated facilities)\n" + SOURCE_WT_FORMS, size=8)
+    sns.despine(left=True, bottom=True)
+    plt.ylabel("Percentage of patientes", fontsize=8)
+    format_graph()
+    plt.yticks([])
+    plt.ylabel("")
+    plt.savefig(f"{img}/compliers_by_volume.jpeg", bbox_inches='tight', dpi=300)
+
+
+def complier_by_urban(complier_df):
+    plt.figure()
+    complier_df["urban_labeled"] = complier_df["urban"]
+    complier_df = complier_df.replace({"urban_labeled":{0:"rural", 1:"urban"}})
+
+    order_urban = ["rural", "urban"]
+    sns.countplot(complier_df.query("treatment == 1"), x="urban_labeled", 
+                color=TREATED, order=order_urban, **dict(alpha=0.3))
+    ax = sns.countplot(complier_df.query("treatment == 1 & complier == 1"),
+                        x="urban_labeled", order=order_urban, color=TREATED)
+    ax.text(0, 13.3, "13 / 23", ha='center', weight='bold')
+    ax.text(1, 13.3, "13 / 16", ha='center',weight='bold')
+
+    plt.title("ANC: Number of complying facilities in urban/rural areas" ,fontsize=10)
+    plt.xlabel("40 treated facilities in total \n" + SOURCE_WT_FORMS, size=8)
+    sns.despine(left=True, bottom=True)
+    plt.ylabel("Percentage of patientes", fontsize=8)
+    format_graph()
+    plt.yticks([])
+    plt.ylabel("")
+    plt.savefig(f"{img}/compliers_by_urban.jpeg", bbox_inches='tight', dpi=300)
+
+def complier_by_preparedness(complier_df):
+    plt.figure()
+    complier_eval = complier_df.eval("index_ANC_readiness.notna()")
+    prepared,labels_prep = column_by_quantile(complier_df.loc[complier_eval], 
+                                            "index_ANC_readiness", 3,
+                                            n_round=2,format_int=False)
+    complier_df.loc[complier_eval, "prep"] = prepared
+
+    order_prep=['0.1-0.6', '0.6-0.77', '0.77-1.0']
+
+    sns.countplot(complier_df.query("treatment == 1"), x="prep", 
+                color=TREATED,  order=order_prep, **dict(alpha=0.3))
+    ax = sns.countplot(complier_df.query("treatment == 1 & complier == 1"),
+                        x="prep", order=order_prep, color=TREATED)
+
+    ax.text(0, 7.3, "7 / 8", ha='center', weight='bold')
+    ax.text(1, 12.3, "12 / 18", ha='center',weight='bold')
+    ax.text(2, 6.3, "6 / 12", ha='center', weight='bold')
+
+    plt.title("ANC: Number of complying facilities by ANC preparedness" ,fontsize=10)
+    plt.xlabel("ANC preparedness index - SISMA (40 treated facilities)\n" + SOURCE_WT_FORMS, size=8)
+    sns.despine(left=True, bottom=True)
+    plt.ylabel("Percentage of patientes", fontsize=8)
+    format_graph()
+    plt.yticks([])
+    plt.ylabel("")
+    plt.savefig(f"{img}/compliers_by_preparedness.jpeg", bbox_inches='tight', dpi=300)
+
+
+def complier_pat_nurses(complier_df):
+    complier_df = complier_df.query("n_nurses != 0 & n_nurses.notna()")
+    complier_df["pat_nurses"] = complier_df["volume_base_total"] / complier_df["n_nurses"]
+
+    plt.figure()
+    prepared,labels_prep = column_by_quantile(complier_df, 
+                                            "pat_nurses", 3,
+                                            n_round=0,format_int=False)
+
+    order_nurses=['4.0-53.0', '53.0-153.0', '153.0-299.0']
+
+    sns.countplot(complier_df.query("treatment == 1"), x="prep", 
+                color=TREATED,  order=order_nurses, **dict(alpha=0.3))
+    ax = sns.countplot(complier_df.query("treatment == 1 & complier == 1"),
+                        x="prep", order=order_nurses, color=TREATED)
+
+    plt.title("ANC: Complying facilities and patients per nurse" ,fontsize=10)
+    plt.xlabel("ANC patients per nurse - SISMA (40 treated facilities)", size=8)
+    sns.despine(left=True, bottom=True)
+    plt.ylabel("Percentage of patientes", fontsize=8)
+    format_graph()
+    plt.yticks([])
+    plt.ylabel("")
+
+    plt.savefig(f"{img}/compliers_by_pat_nurses.jpeg", bbox_inches='tight', dpi=300)
+
+
+def gen_complier_graphs(complier_df):
+
+    compliers_defiers_graph(complier_df)
+    complier_by_province(complier_df)
+    complier_by_volume(complier_df)
+    complier_by_urban(complier_df)
+    complier_by_preparedness(complier_df)
+    complier_pat_nurses(complier_df)
+
+    #by nurses/patient
+
 
 # Configs
 CONTROL = "#F95700FF"#"#ffc387"
@@ -436,36 +590,40 @@ SIZE_REG_BOOK = "n = 3389(Control) 3109 (Treated)"
 img = "graphs"
 
 def gen_anc_graphs():
-    root = "/Users/rafaelfrade/arquivos/desenv/lse"
-    treat_control_full_path = f"{root}/adm_data/art_intervention/test/bases_auxiliares/treatment_hdd.dta"
-    tc_df = load_tc_df(treat_control_full_path)
+    ROOT = "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling/data"
+    CLEANED_DATA_PATH = f"{ROOT}/cleaned_data"
+    AUX = f"{ROOT}/aux"
 
-    cleaned_path = f"{root}/ocr/cleaned_data"
-    anc_full_path = f"{cleaned_path}/anc_cpn_endline_v20230611.csv"
-    #anc = load_anc_df(anc_full_path)
-    anc = pd.read_csv(anc_full_path)
+    tc_df = load_tc_df(f"{AUX}/treatment_hdd.dta")
 
-    path_reg_book = f"{root}/anc_rct/surveys/data_csv/Endline"
-    reg_book_full_path = f"{path_reg_book}/anc_registry_book.csv"
-    reg_book = load_registry_book(reg_book_full_path, tc_df)
+    anc_path = f"{CLEANED_DATA_PATH}/anc_cpn_endline_v20230611.csv"
+    anc = pd.read_csv(anc_path)
+
+    reg_book_path = f"{CLEANED_DATA_PATH}/anc_registry_book.csv"
+    reg_book = load_registry_book(reg_book_path, tc_df)
 
     path_hiv = "/Users/rafaelfrade/arquivos/desenv/lse/ocr_hiv"
-    hiv_endline = load_hiv_endline(f"{path_hiv}/hiv_endline_cleaned.csv")
+    #hiv_endline = load_hiv_endline(f"{path_hiv}/hiv_endline_cleaned.csv")
 
-    followup = anc.query("consultation_reason == 2")
+    complier_df = pd.read_stata(f"{CLEANED_DATA_PATH}/complier.dta")
+    volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
+    facility_characteristics = pd.read_stata(f"{AUX}/facility_characteristics.dta")
+    complier_df = complier_df.merge(volume_baseline, on=["facility_cod"])
+    complier_df = complier_df.merge(facility_characteristics, on=["facility_cod", "treatment"])
+
 
     patient_volume()
     avg_consultations_per_patient(reg_book)
-    anc_hiv_opening_hours(hiv_endline, anc)
+    anc_hiv_opening_hours(anc)
     waiting_time_by_consultation_reason(anc)
     anc_het_wt_province(anc)
     anc_het_wt_vol(anc)
-    anc_het_wt_urban(anc)
+    anc_het_wt_urban(anc, complier_df)
     #anc_share_consultations_10(anc)
     #anc_share_arrival_10(anc)
     anc_het_arrival_province(anc)
 
-    gen_complier_graphs()
+    gen_complier_graphs(complier_df)
     print("Finished generating graphs!")
 
 
@@ -474,3 +632,5 @@ def __init__():
     gen_anc_graphs()
 
 __init__()
+
+

@@ -9,7 +9,7 @@ import numpy as np
 from os import listdir
 
 
-def get_csv_data(file_names):
+def get_csv_data(file_names, treat_control):
     csv_data = pd.DataFrame()
     for csv in file_names:
         facility_df = pd.read_csv(f"{cleaned_files_path}/{csv}")
@@ -27,7 +27,6 @@ def get_csv_data(file_names):
 
     # merge with treatment
     csv_data["facility"] = csv_data["us"]
-    treat_control = f"{lse}/adm_data/art_intervention/test/bases_auxiliares/treatment_hdd.dta"
     tc_df = pd.read_stata(treat_control)
     tc_df = tc_df[["facility_cod", "treatment"]]
     csv_data = csv_data.merge(tc_df, left_on="facility", right_on="facility_cod", 
@@ -122,9 +121,7 @@ def create_day_of_the_week(final):
 
 
 def assign_consultation_reason(anc):
-    # merge with consultation reason
-    c_reason_csv = f"{cleaned_data_path}/anc_consultation_reason_20230610.csv"
-
+    
     # load consultation reason
     consultation_reason = pd.read_csv(c_reason_csv)
     consultation_reason = consultation_reason[["us_id", "consultation_reason"]]
@@ -202,7 +199,7 @@ def save_complier_data(anc):
     complier = complier.rename(columns={"facility":"facility_cod"}).set_index("facility_cod")
     complier.loc[[5,9], "complier"] = 1
 
-    complier.to_stata(f"{stata_path}/complier.dta")
+    complier.to_stata(f"{CLEANED_DATA_PATH}/complier.dta")
 
 def share_10(time_array):
     """returns the percent of obs before 10"""
@@ -235,13 +232,16 @@ def gen_open_hours_df(anc):
         list_wt.append(time_diff(close, open_))
 
     open_h["opening_time"] = list_wt
-    open_h.droplevel(1, axis=1).to_stata(f"{stata_path}//opening_time.dta")
+    open_h.droplevel(1, axis=1).to_stata(f"{CLEANED_DATA_PATH}/opening_time.dta")
 
 
 def clean_anc():
+    treat_control = f"{AUX}/treatment_hdd.dta"
+
     # load csv files
     file_names = [f for f in listdir(cleaned_files_path) if "csv" in f]
-    anc = (get_csv_data(file_names).pipe(validate_times)
+    anc = (get_csv_data(file_names, treat_control)
+                             .pipe(validate_times)
                              .pipe(calculate_waiting_time)
                              .pipe(create_day_of_the_week)
                              .pipe(assign_consultation_reason)
@@ -259,32 +259,36 @@ def clean_anc():
     anc.loc[anc["consultation_reason"] == 1, "reason"] = "1st visits"
     anc.loc[anc["consultation_reason"] == 2, "reason"] = "Follow-up"
 
-    facility_characteristics = pd.read_stata(f"{aux}/facility_characteristics.dta")
+    facility_characteristics = pd.read_stata(f"{AUX}/facility_characteristics.dta")
     facility_characteristics = facility_characteristics.drop("treatment", axis=1)
-    volume_baseline = pd.read_stata(f"{aux}/facility_volume_baseline.dta")
+    volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
 
     anc = anc.merge(facility_characteristics, left_on=["facility"],
             right_on="facility_cod")
     anc = anc.merge(volume_baseline, left_on="facility",
           right_on="facility_cod")
 
-    final_name = "anc_cpn_endline_v20230611"
-    anc.to_csv(f"{cleaned_data_path}/{final_name}.csv",
-                index=False, mode="w")
+    final_name = "anc_cpn_endline_v20230704"
     anc["time_scheduled_cleaned"] = anc["time_scheduled_cleaned"].astype(str)
-    
-    #anc.to_stata(f"{stata_path}/{final_name}.dta")
+
+    nurses_notna = anc.eval("n_nurses != 0 & n_nurses.notna()")
+    anc.loc[nurses_notna, "pat_nurses"] = (anc.loc[nurses_notna, "volume_base_total"]
+                                            .div(anc.loc[nurses_notna, "n_nurses"]))
+    anc.to_csv(f"{CLEANED_DATA_PATH}/{final_name}.csv",
+                index=False, mode="w")
+    #anc.to_stata(f"{CLEANED_DATA_PATH}/{final_name}.dta")
 
     gen_open_hours_df(anc)
     print("ANC cleaned!")
 
 #PATHS
-lse = "/Users/rafaelfrade/arquivos/desenv/lse"
-root = f"{lse}/ocr"
-aux = f"{lse}/anc_hiv_scheduling/data/aux"
-cleaned_files_path = f"{root}/files_to_review/csv_cleaned"
-cleaned_data_path = f"{root}/cleaned_data"
-stata_path = f"{lse}/anc_rct/data"
+ROOT = "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling/data"
+
+cleaned_files_path = f"{ROOT}/anc/csv_cleaned"
+CLEANED_DATA_PATH = f"{ROOT}/cleaned_data"
+AUX = f"{ROOT}/aux"
+
+c_reason_csv = f"{AUX}/anc_consultation_reason_20230610.csv"
 
 def __init__():
     clean_anc()
