@@ -131,6 +131,7 @@ def column_by_quantile(df, col, n_quantiles,n_round=2,format_int=True):
         
     return np.select(conditions, labels),labels
 
+"""
 ROOT = "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling/data"
 ROOT = "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling/data"
 
@@ -145,6 +146,6 @@ volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
 complier_df = complier_df.merge(facility_characteristics, on=["facility_cod", "treatment"])
 complier_df = complier_df.merge(volume_baseline, on=["facility_cod"])
 
-
 column_by_quantile(complier_df.query("index_ANC_readiness.notna()"),
                    "index_ANC_readiness", 3, n_round=0,format_int=False)
+"""

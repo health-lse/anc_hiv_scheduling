@@ -190,6 +190,12 @@ def calculate_std_scheduled_time(anc):
                 right_on=["facility", "day"], how="inner")
 
 
+def create_flag_before_7(anc):
+    anc["before_7"] = 0
+    anc.loc[anc.eval("time_arrived <= 700"), "before_7"] = 1
+    return anc
+
+
 def save_complier_data(anc):
 ## SAVE COMPLIER DATASET
     complier = (anc.groupby("facility")
@@ -209,11 +215,11 @@ def share_10(time_array):
     return obs_before_10 / total_obs
 
 
-def gen_open_hours_df(anc):
+def generate_open_hours_df(anc):
     time_array = np.array([600, 800, 1000, 1050, 1200])
     share_10(time_array)
 
-    open_h = (anc.groupby(["facility", "day","treatment","day_of_week"])
+    open_h = (anc.groupby(["facility_cod", "day","treatment","day_of_week"])
     .agg({"time_entered":["first", "last",share_10],
             "time_arrived":share_10})
     .reset_index())
@@ -233,6 +239,22 @@ def gen_open_hours_df(anc):
 
     open_h["opening_time"] = list_wt
     open_h.droplevel(1, axis=1).to_stata(f"{CLEANED_DATA_PATH}/opening_time.dta")
+
+
+def create_hospital_flag(anc):
+    anc["hospital"] = 0
+    q_hospital = anc.eval("facility_name.str.contains('Hospital')")
+    q_hr = anc.eval("facility_name.str.contains('HR')")
+    anc.loc[q_hospital, "hospital"] = 1
+    anc.loc[q_hr, "hospital"] = 1
+    return anc
+
+
+def create_maputo_flag(anc):
+    anc["maputo"] = 0
+    q_maputo = anc.eval("province.isin(['Maputo Cidade', 'Maputo Província'])")
+    anc.loc[q_maputo, "maputo"] = 1
+    return anc
 
 
 def clean_anc():
@@ -259,14 +281,18 @@ def clean_anc():
     anc.loc[anc["consultation_reason"] == 1, "reason"] = "1st visits"
     anc.loc[anc["consultation_reason"] == 2, "reason"] = "Follow-up"
 
+    anc = anc.rename(columns={"facility":"facility_cod"})
+
     facility_characteristics = pd.read_stata(f"{AUX}/facility_characteristics.dta")
     facility_characteristics = facility_characteristics.drop("treatment", axis=1)
     volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
 
-    anc = anc.merge(facility_characteristics, left_on=["facility"],
-            right_on="facility_cod")
-    anc = anc.merge(volume_baseline, left_on="facility",
-          right_on="facility_cod")
+    anc = anc.merge(facility_characteristics, on=["facility_cod"], how="left")
+    anc = anc.merge(volume_baseline, on=["facility_cod"], how="left")
+
+    anc = (create_hospital_flag(anc)
+            .pipe(create_maputo_flag)
+            .pipe(create_flag_before_7))
 
     final_name = "anc_cpn_endline_v20230704"
     anc["time_scheduled_cleaned"] = anc["time_scheduled_cleaned"].astype(str)
@@ -274,11 +300,15 @@ def clean_anc():
     nurses_notna = anc.eval("n_nurses != 0 & n_nurses.notna()")
     anc.loc[nurses_notna, "pat_nurses"] = (anc.loc[nurses_notna, "volume_base_total"]
                                             .div(anc.loc[nurses_notna, "n_nurses"]))
+    anc.loc[nurses_notna, "low_pat_nurses"] = 0
+    nurses_notna_low = anc.eval("n_nurses != 0 & n_nurses.notna() & pat_nurses <= 151")
+    anc.loc[nurses_notna_low, "low_pat_nurses"] = 1
+
     anc.to_csv(f"{CLEANED_DATA_PATH}/{final_name}.csv",
                 index=False, mode="w")
     #anc.to_stata(f"{CLEANED_DATA_PATH}/{final_name}.dta")
 
-    gen_open_hours_df(anc)
+    generate_open_hours_df(anc)
     print("ANC cleaned!")
 
 #PATHS
@@ -294,3 +324,6 @@ def __init__():
     clean_anc()
 
 __init__()
+
+
+

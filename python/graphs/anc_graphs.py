@@ -352,6 +352,15 @@ def anc_het_wt_urban(anc, complier_df):
 
     plt.savefig(f"{img}/anc_het_wt_urban.jpeg", bbox_inches='tight',dpi=300)
 
+def urban_by_province(anc):
+    sns.barplot(anc, x="province",
+            y="urban",
+            hue="treatment_status",
+            palette=palette_anc,
+            hue_order=order,errwidth=0.5, capsize=0.1)
+    plt.title("Percent of patients in urban facilities by province")
+    plt.savefig(f"{img}/urban_by_province.jpeg", bbox_inches='tight',dpi=300)
+
 import forestplot as fp
 import scipy.stats as st
 
@@ -510,9 +519,9 @@ def complier_by_urban(complier_df):
 
 def complier_by_preparedness(complier_df):
     plt.figure()
-    complier_eval = complier_df.eval("index_ANC_readiness.notna()")
+    complier_eval = complier_df.eval("index_anc_readiness.notna()")
     prepared,labels_prep = column_by_quantile(complier_df.loc[complier_eval], 
-                                            "index_ANC_readiness", 3,
+                                            "index_anc_readiness", 3,
                                             n_round=2,format_int=False)
     complier_df.loc[complier_eval, "prep"] = prepared
 
@@ -542,16 +551,17 @@ def complier_pat_nurses(complier_df):
     complier_df["pat_nurses"] = complier_df["volume_base_total"] / complier_df["n_nurses"]
 
     plt.figure()
-    prepared,labels_prep = column_by_quantile(complier_df, 
+    patnurses,labels_patnurses = column_by_quantile(complier_df, 
                                             "pat_nurses", 3,
                                             n_round=0,format_int=False)
 
-    order_nurses=['4.0-53.0', '53.0-153.0', '153.0-299.0']
+    order_nurses=labels_patnurses#['4.0-53.0', '53.0-153.0', '153.0-299.0']
+    complier_df["pat_nurses_groups"] = patnurses
 
-    sns.countplot(complier_df.query("treatment == 1"), x="prep", 
+    sns.countplot(complier_df.query("treatment == 1"), x="pat_nurses_groups", 
                 color=TREATED,  order=order_nurses, **dict(alpha=0.3))
     ax = sns.countplot(complier_df.query("treatment == 1 & complier == 1"),
-                        x="prep", order=order_nurses, color=TREATED)
+                        x="pat_nurses_groups", order=order_nurses, color=TREATED)
 
     plt.title("ANC: Complying facilities and patients per nurse" ,fontsize=10)
     plt.xlabel("ANC patients per nurse - SISMA (40 treated facilities)", size=8)
@@ -560,20 +570,16 @@ def complier_pat_nurses(complier_df):
     format_graph()
     plt.yticks([])
     plt.ylabel("")
-
     plt.savefig(f"{img}/compliers_by_pat_nurses.jpeg", bbox_inches='tight', dpi=300)
 
 
 def gen_complier_graphs(complier_df):
-
     compliers_defiers_graph(complier_df)
     complier_by_province(complier_df)
     complier_by_volume(complier_df)
     complier_by_urban(complier_df)
     complier_by_preparedness(complier_df)
     complier_pat_nurses(complier_df)
-
-    #by nurses/patient
 
 
 # Configs
@@ -606,12 +612,11 @@ def gen_anc_graphs():
     #hiv_endline = load_hiv_endline(f"{path_hiv}/hiv_endline_cleaned.csv")
 
     complier_df = pd.read_stata(f"{CLEANED_DATA_PATH}/complier.dta")
-    volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
+    #volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
     facility_characteristics = pd.read_stata(f"{AUX}/facility_characteristics.dta")
-    complier_df = complier_df.merge(volume_baseline, on=["facility_cod"])
+    #complier_df = complier_df.merge(volume_baseline, on=["facility_cod"])
     complier_df = complier_df.merge(facility_characteristics, on=["facility_cod", "treatment"])
-
-
+    urban_by_province(anc)
     patient_volume()
     avg_consultations_per_patient(reg_book)
     anc_hiv_opening_hours(anc)
@@ -623,10 +628,11 @@ def gen_anc_graphs():
     #anc_share_arrival_10(anc)
     anc_het_arrival_province(anc)
 
-    gen_complier_graphs(complier_df)
+    #gen_complier_graphs(complier_df)
+
+    urban_by_province(anc)
+
     print("Finished generating graphs!")
-
-
 
 def __init__():
     gen_anc_graphs()
