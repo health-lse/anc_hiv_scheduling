@@ -162,6 +162,8 @@ def clean_time_scheduled_anc(anc):
 
     anc["time_arrived_float"] = (anc["time_arrived"]
                                             .apply(time_to_time_float))
+    anc["consultation_time_float"] = (anc["time_entered"]
+                                            .apply(time_to_time_float))
     return anc
 
 
@@ -171,7 +173,7 @@ def select_columns_anc(anc):
         "time_arrived", "time_entered", "time_left", "time_scheduled_cleaned",
         "waiting_time", "consultation_duration", 
         "consultation_reason", "scheduled_mean_fac", "complier", "full_complier",
-        "time_arrived_float"]]
+        "time_arrived_float", "consultation_time_float"]]
     anc["time_scheduled_hours"] = (anc["time_scheduled_cleaned"]
                                             .apply(time_to_time_float))
     return anc
@@ -285,10 +287,10 @@ def clean_anc():
 
     facility_characteristics = pd.read_stata(f"{AUX}/facility_characteristics.dta")
     facility_characteristics = facility_characteristics.drop("treatment", axis=1)
-    volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
+    #volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
 
     anc = anc.merge(facility_characteristics, on=["facility_cod"], how="left")
-    anc = anc.merge(volume_baseline, on=["facility_cod"], how="left")
+    #anc = anc.merge(volume_baseline, on=["facility_cod"], how="left")
 
     anc = (create_hospital_flag(anc)
             .pipe(create_maputo_flag)
@@ -324,6 +326,7 @@ def __init__():
     clean_anc()
 
 __init__()
+
 
 
 
