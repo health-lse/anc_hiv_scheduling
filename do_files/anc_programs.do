@@ -4,6 +4,17 @@
 	* one regression witho controls and fe
 	* save the results in a tex file using the filename param
 */
+
+capture program drop add_scalars_anc
+program add_scalars_anc
+
+	qui distinct facility_cod
+	qui estadd scalar n_facilities = r(ndistinct)
+	qui distinct facility_cod if treatment == 1
+	qui estadd scalar n_compliers = r(ndistinct)
+end
+
+
 capture program drop anc_reg
 program anc_reg
 	syntax varlist( max=1) [if] [ , absorb(namelist) filename(string) controls(namelist)  ]
@@ -20,30 +31,49 @@ program anc_reg
 	eststo clear
 	estimates clear
 
-	qui reg $outcome treatment 
-	
 
 	qui reghdfe $outcome treatment, a($fixed_effects) vce(cl facility_cod)
 	qui sum $outcome if treatment==0
 	qui estadd scalar control_mean= r(mean)
+	qui estadd scalar control_std= r(sd)
+
+	add_scalars_anc
 	qui estimates store model1, title("OLS")
 
 	qui reghdfe $outcome treatment $controls_reg , a( $fixed_effects ) vce(cl facility_cod)
+	add_scalars_anc
 	qui estimates store model2, title("OLS")
 
-	qui ivreghdfe $outcome (complier=treatment), absorb($fixed_effects) cluster(facility_cod)
+	// so that we have only one row in the regression table,
+	// I change the name of complier to treatment 
+	rename treatment treatment_iv
+	rename complier treatment
+	//qui ivreghdfe $outcome (complier=treatment), absorb($fixed_effects) cluster(facility_cod)
+	qui ivreghdfe $outcome (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_anc
 	qui estimates store model3, title("IV")
 
-	qui ivreghdfe $outcome $controls_reg (complier=treatment), absorb($fixed_effects) cluster(facility_cod)
+	qui ivreghdfe $outcome $controls_reg (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_anc
 	qui estimates store model4, title("IV")
 
+	drop treatment
+	rename complier10 treatment
+	qui ivreghdfe $outcome (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_anc
+	qui estimates store model5, title("IV ( \geq 10am) ")
+
+	qui ivreghdfe $outcome $controls_reg (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_anc
+	qui estimates store model6, title("IV ( \geq 10am) ")
+
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE")
-	
-	esttab  *, stats(control_mean r2 N)star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace
-	
+
+	esttab  *, stats(control_mean control_std  n_compliers  r2 N, label( "Control Mean" "Control SD" "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace
+
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE")
-	
-	esttab * using "`filename'", style(tex) stats(control_mean r2 N)star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace
+
+	esttab * using "`filename'", style(tex) stats(control_mean control_std  n_compliers  r2 N, label( "Control Mean" "Control SD"  "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace
 	estfe . model*, restore
 
 	restore
@@ -60,7 +90,7 @@ program anc_reg_het
 	di `interaction'
 	global outcome `1'
 	global fixed_effects `absorb'
-	local controls_reg `controls'
+	global controls_reg `controls'
 
 	eststo clear
 	estimates clear
@@ -68,25 +98,41 @@ program anc_reg_het
 	qui reghdfe $outcome c.treatment##c.`het_var', a($fixed_effects) vce(cl facility_cod)
 	qui sum $outcome if treatment==0
 	qui estadd scalar control_mean= r(mean)
+	add_scalars_anc
 	qui estimates store model1, title("OLS")
 
 	qui reghdfe $outcome c.treatment##c.`het_var' $controls_reg, a($fixed_effects) vce(cl facility_cod)
+	add_scalars_anc
 	qui estimates store model2, title("OLS")
 	
-	qui ivreghdfe $outcome c.complier##c.`het_var' (complier=treatment), absorb($fixed_effects) cluster(facility_cod)
+	rename treatment treatment_iv
+	rename complier treatment
+	qui ivreghdfe $outcome c.treatment##c.`het_var' (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_anc
 	qui estimates store model3, title("IV")
 
-	qui ivreghdfe $outcome c.complier##c.`het_var' (complier=treatment) $controls_reg, absorb($fixed_effects) cluster(facility_cod)
+	qui ivreghdfe $outcome c.treatment##c.`het_var' (treatment=treatment_iv) $controls_reg, absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_anc
 	qui estimates store model4, title("IV")
+	
+	drop treatment
+	rename complier10 treatment
+	qui ivreghdfe $outcome c.treatment##c.`het_var' (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_anc
+	qui estimates store model5, title("IV ( \geq 10am) ")
 
+	qui ivreghdfe $outcome c.treatment##c.`het_var' (treatment=treatment_iv) $controls_reg, absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_anc
+	qui estimates store model6, title("IV ( \geq 10am) ")
+	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	//return list
 
-	esttab  *, stats(control_mean r2 N)star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace
+	esttab  *, stats(control_mean control_std  n_compliers  r2 N, label( "Control Mean" "Control SD" "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace interaction(" X ") label
 	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	
-	esttab * using "`filename'", style(tex) stats(control_mean r2 N)star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace
+	esttab * using "`filename'", style(tex) stats(control_mean control_std  n_compliers  r2 N, label( "Control Mean" "Control SD" "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace interaction(" X ") label
 	estfe . model*, restore
 
 	restore

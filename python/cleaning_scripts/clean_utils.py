@@ -155,6 +155,8 @@ def time_to_time_float(time):
     """ transforms 730 into 7.5 """
     if not time:
         return np.nan
+    if np.isnan(time):
+        return time
     if time == "":
         return np.nan
     if len(str(time)) < 3:

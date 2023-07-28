@@ -73,7 +73,6 @@ def validate_times(final):
     final = final[(final["time_left"].astype(str).str.len() > 2) &
             (final["time_left"].astype(str).str.len() < 5)]
 
-
     final["waiting_time_temp"] = final["time_entered"] - final["time_arrived"]
     final = final.query("waiting_time_temp >= 0")
 
@@ -121,7 +120,7 @@ def create_day_of_the_week(final):
 
 
 def assign_consultation_reason(anc):
-    
+
     # load consultation reason
     consultation_reason = pd.read_csv(c_reason_csv)
     consultation_reason = consultation_reason[["us_id", "consultation_reason"]]
@@ -137,16 +136,13 @@ def assign_consultation_reason(anc):
             indicator=True)
 
 
-def clean_time_scheduled_anc(anc):
+def define_complier(anc):
     anc = anc.drop("1_us_id", axis=1)
-    anc.loc[anc["time_scheduled"] == 'nan', "time_scheduled"] = ""
-    anc.loc[anc["time_scheduled"].isnull(), "time_scheduled"] = ""
-    anc["time_scheduled_cleaned"] = (anc["time_scheduled"].astype(str)
-                                                        .apply(clean_time_scheduled)
-                                                        .apply(clean_time_scheduled))
+    time_scheduled_anc = pd.read_csv(f"{AUX}/time_scheduled_cleaned.csv")
+    anc = anc.merge(time_scheduled_anc, on=["facility_cod", "us_id"])
 
     anc["scheduled"] = 0
-    anc.loc[anc["time_scheduled_cleaned"] != "", "scheduled"] = 1
+    anc.loc[anc["time_scheduled_cleaned"].notna(), "scheduled"] = 1
 
     scheduled_by_fac = (anc.query("consultation_reason == 2")
                         .groupby("facility")["scheduled"]
@@ -192,16 +188,44 @@ def calculate_std_scheduled_time(anc):
                 right_on=["facility", "day"], how="inner")
 
 
+def define_complier_10(anc):
+    anc["sched_10"] = 0
+    q_after10 = anc.eval("time_scheduled_hours >= 1000")
+    anc.loc[q_after10, "sched_10"] = 1
+
+    sched_after_10 = (anc.query("consultation_reason == 2")
+        .groupby(["facility"])["sched_10"]
+        .mean().reset_index())
+
+    sched_after_10["complier10"] = 0
+    q_complier10 = sched_after_10.eval("sched_10 >= 0.2")
+    sched_after_10.loc[q_complier10, "complier10"] = 1
+
+    anc = anc.merge(sched_after_10[["facility", "complier10"]],
+                on=["facility"])
+    # facilities 54 and 66 open 7:30, so they are compliers
+    # facilities 5 and 39 are control facilities, but they
+    # scheduled patients
+    anc.loc[anc.eval("facility.isin([5,39,54,66]) "), "complier10"] = 1
+    return anc
+
+
 def create_flag_before_7(anc):
     anc["before_7"] = 0
     anc.loc[anc.eval("time_arrived <= 700"), "before_7"] = 1
     return anc
 
 
+def create_flag_more_than_3h(anc):
+    anc["more_than_3"] = 0
+    anc.loc[anc.eval("waiting_time >= 180"), "more_than_3"] = 1
+    return anc
+
+
 def save_complier_data(anc):
 ## SAVE COMPLIER DATASET
     complier = (anc.groupby("facility")
-                [["treatment", "complier", "full_complier"]]
+                [["treatment", "complier", "complier10"]]
                 .first()
                 .reset_index())
     complier = complier.rename(columns={"facility":"facility_cod"}).set_index("facility_cod")
@@ -269,9 +293,10 @@ def clean_anc():
                              .pipe(calculate_waiting_time)
                              .pipe(create_day_of_the_week)
                              .pipe(assign_consultation_reason)
-                             .pipe(clean_time_scheduled_anc)
+                             .pipe(define_complier)
                              .pipe(select_columns_anc)
-                             .pipe(calculate_std_scheduled_time))
+                             .pipe(calculate_std_scheduled_time)
+                             .pipe(define_complier_10))
 
     anc.loc[anc["facility"].isin([5,39]), "complier"] = 1
     save_complier_data(anc)
@@ -289,12 +314,17 @@ def clean_anc():
     facility_characteristics = facility_characteristics.drop("treatment", axis=1)
     #volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
 
-    anc = anc.merge(facility_characteristics, on=["facility_cod"], how="left")
+    facility_characteristics = facility_characteristics.drop("complier", axis=1)
+    facility_characteristics = facility_characteristics.drop("full_complier", axis=1)
+    anc = anc.merge(facility_characteristics, 
+                    on="facility_cod",
+                     how="left")
     #anc = anc.merge(volume_baseline, on=["facility_cod"], how="left")
 
     anc = (create_hospital_flag(anc)
             .pipe(create_maputo_flag)
-            .pipe(create_flag_before_7))
+            .pipe(create_flag_before_7)
+            .pipe(create_flag_more_than_3h))
 
     final_name = "anc_cpn_endline_v20230704"
     anc["time_scheduled_cleaned"] = anc["time_scheduled_cleaned"].astype(str)
@@ -309,6 +339,7 @@ def clean_anc():
     anc.to_csv(f"{CLEANED_DATA_PATH}/{final_name}.csv",
                 index=False, mode="w")
     #anc.to_stata(f"{CLEANED_DATA_PATH}/{final_name}.dta")
+
 
     generate_open_hours_df(anc)
     print("ANC cleaned!")
@@ -326,7 +357,4 @@ def __init__():
     clean_anc()
 
 __init__()
-
-
-
 

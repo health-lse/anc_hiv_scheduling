@@ -4,14 +4,16 @@ global anc_dataset "data/cleaned_data/anc_cpn_endline_v20230704.dta"
 save $anc_dataset, replace
 
 
-
 do do_files/anc_programs
 
 global controls score_basic_amenities score_basic_equipment index_general_service index_anc_readiness urban hospital volume_base_total
 
 global controls_without_urban score_basic_amenities score_basic_equipment index_general_service index_anc_readiness hospital volume_base_total
 
+
 /* WAITING TIME */
+global anc_dataset "data/cleaned_data/anc_cpn_endline_v20230704.dta"
+
 use $anc_dataset, clear
 keep if consultation_reason == 1
 keep if waiting_time < 281 // remove outliers 5% - 1st
@@ -38,53 +40,27 @@ anc_reg_het waiting_time , controls($controls_without_urban) absorb(province day
 anc_reg_het waiting_time , controls($controls) absorb(province day_of_week) filename("tables/wt_lowpat_followup.tex") het_var(low_pat_nurses)
 
 
+anc_reg waiting_time if inlist(province, "Gaza", "Inhambane"), controls($controls) absorb(province day_of_week) filename("tables/wt_followup_gaza_inham.tex")
 
-/* TOP 20 */
+
+
+/* MORE THAN 3H */
 use $anc_dataset, clear
 keep if consultation_reason == 1
-keep if waiting_time > 190
-anc_reg waiting_time , controls($controls) absorb(province day_of_week) filename("tables/wt_top20_1st.tex")
+anc_reg more_than_3 , controls($controls) absorb(province day_of_week) filename("tables/wt_more_than_3_1st.tex")
 
-anc_reg_het waiting_time , controls($controls) absorb( day_of_week) filename("tables/wt_top20_maputo_1st.tex") het_var(maputo)
+anc_reg_het more_than_3 , controls($controls) absorb( day_of_week) filename("tables/wt_more_than_3_maputo_1st.tex") het_var(maputo)
 
-anc_reg_het waiting_time , controls($controls_without_urban) absorb(province day_of_week) filename("tables/wt_top20_urban_1st.tex") het_var(urban)
+anc_reg_het more_than_3 , controls($controls_without_urban) absorb(province day_of_week) filename("tables/wt_more_than_3_urban_1st.tex") het_var(urban)
 
 
 use $anc_dataset, clear
 keep if consultation_reason == 2
-keep if waiting_time > 165
-anc_reg waiting_time , controls($controls) absorb(province day_of_week) filename("tables/wt_top20_followup.tex")
+anc_reg more_than_3 , controls($controls) absorb(province day_of_week) filename("tables/wt_more_than_3_followup.tex")
 
-anc_reg_het waiting_time , controls($controls) absorb( day_of_week) filename("tables/wt_top20_maputo_followup.tex") het_var(maputo)
+anc_reg_het more_than_3 , controls($controls) absorb( day_of_week) filename("tables/wt_more_than_3_maputo_followup.tex") het_var(maputo)
 
-anc_reg_het waiting_time , controls($controls_without_urban) absorb( province day_of_week) filename("tables/wt_top20_urban_followup.tex") het_var(urban)
-
-
-
-/* max waiting time */
-use $anc_dataset, clear
-do do_files/anc_programs
-collapse (max) waiting_time (first) treatment consultation_reason province day_of_week complier maputo $controls, by (facility_cod day)
-rename waiting_time max_waiting_time
-
-keep if consultation_reason == 1
-anc_reg max_waiting_time  , controls($controls) absorb(province day_of_week) filename("tables/max_waiting_time_1st.tex")
-
-anc_reg_het max_waiting_time , controls($controls) absorb( day_of_week) filename("tables/max_waiting_time_maputo_1st.tex") het_var(maputo)
-
-anc_reg_het max_waiting_time , controls($controls_without_urban) absorb( province day_of_week) filename("tables/max_waiting_time_urban_1st.tex") het_var(urban)
-
-use $anc_dataset, clear
-keep if consultation_reason == 2
-collapse (max) waiting_time (first) treatment consultation_reason province day_of_week complier maputo $controls, by (facility_cod day)
-rename waiting_time max_waiting_time
-
-anc_reg max_waiting_time , controls($controls) absorb(province day_of_week) filename("tables/max_waiting_time_followup.tex")
-
-anc_reg_het max_waiting_time , controls($controls) absorb( day_of_week) filename("tables/max_waiting_time_maputo_followup.tex") het_var(maputo)
-
-anc_reg_het max_waiting_time , controls($controls_without_urban) absorb( province day_of_week) filename("tables/max_waiting_time_urban_followup.tex") het_var(urban)
-
+anc_reg_het more_than_3 , controls($controls_without_urban) absorb(province day_of_week) filename("tables/wt_more_than_3_urban_followup.tex") het_var(urban)
 
 
 
@@ -152,6 +128,33 @@ anc_reg_het time_arrived_float , controls($controls) absorb( day_of_week) filena
 anc_reg_het time_arrived_float , controls($controls_without_urban) absorb( province day_of_week) filename("tables/arrival_time_urban_followup.tex") het_var(urban)
 
 
+anc_reg time_arrived_float  if inlist(province, "Gaza", "Inhambane") , controls($controls) absorb(province day_of_week) filename("tables/arrival_time_followup_gaza_inhambane.tex")
+
+
+/* Registry Book: Number of consultations */
+cd "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling"
+use data/cleaned_data/anc_registry_book.dta, clear
+merge m:1 facility_cod using "data/aux/facility_characteristics.dta"
+drop _merge
+
+replace facility_cod = 50 if facility_name == "CS Urbano" & facility_cod == .
+replace facility_cod = 66 if facility_name == "CS Unidade 7"& facility_cod == .
+replace facility_cod = 4 if facility_name == "CS Porto"& facility_cod == .
+
+gen log_total = log(anc_total)
+destring gestational_age_1st, replace
+replace gestational_age_1st=. if gestational_age_1st > 45  //65 changes
+
+global controls_rb $controls gestational_age_1st
+global controls_rb_without_urban $controls_without_urban gestational_age_1st
+
+anc_reg anc_total , controls($controls_rb) absorb(province) filename("tables/registry_book.tex")
+
+anc_reg_het anc_total , controls($controls_rb_without_urban) absorb( province ) filename("tables/registry_book_urban.tex") het_var(urban)
+
+
+
+
 /* Arrived after 10 */
 clear
 import delimited "data/anc_cpn_endline_v20230704.csv"
@@ -162,19 +165,6 @@ anc_reg arrived_after_10 if consultation_reason==2 , controls($controls) absorb(
 
 
 anc_reg time_arrived_float if consultation_reason == 2, controls($controls) absorb(province day_of_week) filename("tables/time_arrived.tex")
-
-
-/*Registry Book: Number of consultations*/
-cd "/Users/rafaelfrade/arquivos/desenv/lse/anc_rct"
-global controls score_basic_amenities score_basic_equipment index_general_service index_anc_readiness urban volume_base_total
-do do_files/registry_book
-
-
-cd "/Users/rafaelfrade/arquivos/desenv/lse/anc_rct"
-global controls score_basic_amenities score_basic_equipment index_general_service index_anc_readiness urban volume_base_total
-do do_files/exit_interview
-
-
 
 // volume - sisma
 use "data/sisma/sisma_volume.dta", clear
@@ -204,6 +194,14 @@ foreach x in  log_1st log_followup  log_total {
 
 reghdfe log_total c.treatment##c.post $controls if maputo == 1, a( province month) vce(cl facility_cod)
 
+
+/* REG COMPLIERS */
+
+use "data/aux/facility_characteristics.dta", clear
+
+
+reg complier distance_to_maputo $controls 
+reg complier distance_to_maputo $controls if inlist( province, "Gaza", "Inhambane")
 
 
 
