@@ -232,6 +232,7 @@ def save_complier_data(anc):
     complier.loc[[5,9], "complier"] = 1
 
     complier.to_stata(f"{CLEANED_DATA_PATH}/complier.dta")
+    return complier
 
 def share_10(time_array):
     """returns the percent of obs before 10"""
@@ -245,7 +246,8 @@ def generate_open_hours_df(anc):
     time_array = np.array([600, 800, 1000, 1050, 1200])
     share_10(time_array)
 
-    open_h = (anc.groupby(["facility_cod", "day","treatment","day_of_week"])
+    open_h = (anc.groupby(["facility_cod", "day","treatment","day_of_week",
+                           "complier", "complier10"])
     .agg({"time_entered":["first", "last",share_10],
             "time_arrived":share_10})
     .reset_index())
@@ -299,7 +301,7 @@ def clean_anc():
                              .pipe(define_complier_10))
 
     anc.loc[anc["facility"].isin([5,39]), "complier"] = 1
-    save_complier_data(anc)
+    complier_df = save_complier_data(anc)
 
     anc["treatment_status"] = "treated"
     anc.loc[anc["treatment"] == 0, "treatment_status"] = "control"
@@ -315,6 +317,7 @@ def clean_anc():
     #volume_baseline = pd.read_stata(f"{AUX}/facility_volume_baseline.dta")
 
     facility_characteristics = facility_characteristics.drop("complier", axis=1)
+    facility_characteristics = facility_characteristics.drop("complier10", axis=1)
     facility_characteristics = facility_characteristics.drop("full_complier", axis=1)
     anc = anc.merge(facility_characteristics, 
                     on="facility_cod",
