@@ -382,7 +382,7 @@ def clean_hiv():
     #tables_df = process_tables() 
     tables_df = pd.read_csv(f"{DATA_FOLDER}/temp/hiv_endline_temp.csv")
     hiv_endline = load_hiv_endline(tables_df)
-    hiv_endline.to_csv(f"{DATA_FOLDER}/hiv/endline/cleaned_data/hiv_endline.csv",
+    hiv_endline.to_csv(f"{DATA_FOLDER}/hiv/endline/extracted_data/hiv_endline.csv",
                     index=False, mode="w")
 
 def __init__():
