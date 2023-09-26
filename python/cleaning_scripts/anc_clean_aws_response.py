@@ -3,7 +3,7 @@ ANC cleaning pipeline
 It loads the csv files, read the table information in each file and clean the contents.
 """
 
-from clean_utils import *
+from anc_clean_utils import *
 import pandas as pd
 import numpy as np
 from os import listdir

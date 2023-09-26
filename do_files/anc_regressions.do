@@ -21,14 +21,8 @@ use $anc_dataset, clear
 do do_files/anc_programs
 
 
-
-
 /* CONTROLS */
-global controls score_basic_amenities score_basic_equipment index_general_service index_anc_readiness urban hospital volume_base_total
-
-global controls_without_urban score_basic_amenities score_basic_equipment index_general_service index_anc_readiness hospital volume_base_total
-
-global controls_without_quality urban hospital volume_base_total
+gen_controls
 
 keep if consultation_reason == 1
 keep if waiting_time < 281 // remove outliers 5% - 1st
@@ -131,5 +125,48 @@ foreach v in proc_index proc_index_1st proc_index_followup {
 	anc_group_reg `v' if anc_total > 1, controls($control_proc) absorb(province) filename("tables/procedures_followup_`v'.tex")
 
 }*/
+
+/* PATIENTS WAITING */
+import delimited data/cleaned_data/patients_waiting.csv, clear
+
+merge m:1 facility_cod using  "data/aux/facility_characteristics.dta"
+drop _merge
+label_vars_anc
+gen_controls
+
+anc_group_reg n_waiting_8 , suffix("")
+anc_group_reg n_waiting_10 , suffix("")
+
+
+/* VOLUME */
+
+set more off
+cd "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling"
+use "data/cleaned_data/sisma_volume.dta", clear
+
+
+drop _merge
+merge m:1 facility_cod using "data/aux/facility_characteristics.dta", keepusing (complier complier10)
+drop _merge
+
+replace quarter2 = 1 if quarter2 == 2
+replace quarter3 = 1 if quarter3 == 3
+
+gen maputo = 0
+replace maputo = 1 if province == "Maputo Cidade"
+replace maputo = 1 if province == "Maputo Província"
+
+
+global controls_vol score_basic_amenities score_basic_equipment index_general_service index_anc_readiness urban hospital
+
+anc_volume_reg anc_followup , absorb(province ) filename("vol_test.tex") controls($controls_vol )
+
+rename index_ANC_readiness index_anc_readiness
+reghdfe anc_followup c.treatment##c.quarter1 c.treatment##c.quarter2 c.treatment##c.quarter3 $controls_vol, a(province) vce(cl facility_cod)
+
+ivreghdfe anc_followup c.quarter1 c.quarter2 c.quarter3 (complier c.complier##c.quarter1 c.complier##c.quarter2 c.complier##c.quarter3 = treatment c.treatment##c.quarter1 c.treatment##c.quarter2 c.treatment##c.quarter3) $controls_vol if maputo==1, a(month) cluster(facility_cod)
+
+
+ivreghdfe $outcome c.post (complier10 c.complier10##c.post = treatment c.treatment##c.post)  $controls_vol , absorb(month ) cluster(facility_cod)
 
 

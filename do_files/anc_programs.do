@@ -31,6 +31,8 @@ program add_scalars_anc
 	qui estadd scalar n_facilities = r(ndistinct)
 	qui distinct facility_cod if treatment == 1
 	qui estadd scalar n_compliers = r(ndistinct)
+	qui capture estadd scalar iv_stat = e(widstat)
+	
 end
 
 capture program drop coefplot_anc
@@ -100,11 +102,11 @@ program anc_reg
 
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" first_month "First Month FE")
 
-	esttab  *, stats(control_mean control_std  n_compliers  r2 N, label( "Control Mean" "Control SD" "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace label
+	esttab  *, stats(control_mean control_std iv_stat  n_compliers  r2 N, label( "Control Mean" "Control SD"  "Kleibergen-Paap Wald F stat." "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace label
 
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" first_month "First Month FE")
 
-	esttab * using "`filename'", style(tex) stats(control_mean control_std  n_compliers  r2 N, label( "Control Mean" "Control SD"  "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace label
+	esttab * using "`filename'", style(tex) stats(control_mean control_std iv_stat  n_compliers  r2 N, label( "Control Mean" "Control SD" "Kleibergen-Paap Wald F stat."  "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace label
 	estfe . model*, restore
 
 end
@@ -160,11 +162,11 @@ program anc_reg_het
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	//return list
 
-	esttab  *, stats(control_mean control_std  n_compliers  r2 N, label( "Control Mean" "Control SD" "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace interaction(" X ") label
+	esttab  *, stats(control_mean control_std iv_stat  n_compliers  r2 N, label( "Control Mean" "Control SD" "KP Wald F stat" "Compliers"  "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace interaction(" X ") label
 	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	
-	esttab * using "`filename'", style(tex) stats(control_mean control_std  n_compliers  r2 N, label( "Control Mean" "Control SD" "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace interaction(" X ") label
+	esttab * using "`filename'", style(tex) stats(control_mean control_std iv_stat n_compliers  r2 N, label( "Control Mean" "Control SD" "KP Wald F stat" "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace interaction(" X ") label
 	estfe . model*, restore
 
 	restore
@@ -174,16 +176,6 @@ capture program drop anc_group_reg
 program anc_group_reg
 	syntax varlist( max=1) [if] [ , suffix(string) ]
 	global outcome `1'
-	//anc_reg $outcome , controls($controls) absorb(province day_of_week) filename("tables/`1'_`suffix'.tex")
-
-	//anc_reg_het $outcome , controls($controls) absorb( day_of_week) filename("tables/`1'_maputo_`suffix'.tex") het_var(maputo)
-
-
-	//anc_reg_het $outcome , controls($controls) absorb( day_of_week) filename("tables/`1'_gaza_inhambane_`suffix'.tex") het_var(gaza_inhambane)
-
-	//anc_reg_het $outcome , controls($controls_without_urban) absorb(province day_of_week) filename("tables/`1'_urban_`suffix'.tex") het_var(urban)
-
-	//anc_reg_het $outcome , controls($controls_without_quality) absorb(province day_of_week) filename("tables/`1'_quality_pca_`suffix'.tex") het_var(quality_pca)
 	
 	anc_group_reg_custom_fe $outcome , suffix(`suffix') absorb(province day_of_week) absorb_maputo_reg(day_of_week)
 
@@ -201,8 +193,6 @@ program anc_group_reg_custom_fe
 	anc_reg $outcome , controls($controls) absorb($absorb) filename("tables/`1'_`suffix'.tex")
 
 	anc_reg_het $outcome , controls($controls) absorb($absorb_maputo_reg) filename("tables/`1'_maputo_`suffix'.tex") het_var(maputo)
-
-	anc_reg_het $outcome , controls($controls) absorb( $absorb_maputo_reg) filename("tables/`1'_gaza_inhambane_`suffix'.tex") het_var(gaza_inhambane)
 
 	anc_reg_het $outcome , controls($controls_without_urban) absorb($absorb) filename("tables/`1'_urban_`suffix'.tex") het_var(urban)
 
@@ -288,9 +278,20 @@ program anc_volume_reg
 	reghdfe $outcome c.treatment##c.post##maputo $controls_reg, a(  month) vce(cl facility_cod)
 	estimates store model2, title("OLS")
 
-	ivreghdfe $outcome c.post (complier c.complier##c.post = treatment c.treatment##c.post)  $controls_reg , absorb(month province) cluster(facility_cod)
-	estimates store model3, title("IV")
 
+	ivreghdfe $outcome c.post (complier c.complier##c.post = treatment c.treatment##c.post) , absorb(month province) cluster(facility_cod)
+	estimates store model3, title("IV")
+	
+	ivreghdfe $outcome c.post (complier c.complier##c.post = treatment c.treatment##c.post)  $controls_reg , absorb(month province) cluster(facility_cod)
+	estimates store model4, title("IV")
+
+
+	ivreghdfe $outcome c.post (complier10 c.complier10##c.post = treatment c.treatment##c.post) , absorb(month province) cluster(facility_cod)
+	estimates store model5, title("IV")
+	
+	ivreghdfe $outcome c.post (complier10 c.complier10##c.post = treatment c.treatment##c.post)  $controls_reg , absorb(month province) cluster(facility_cod)
+	estimates store model6, title("IV")
+	
 /*	ivreghdfe $outcome (complier complier##quarter1 complier##quarter2 complier##quarter3 = treatment treatment##quarter1 treatment##quarter2 treatment##quarter3) $controls, absorb($fixed_effects) cluster(facility_cod)
 	estimates store model4, title("IV")*/
 
@@ -301,6 +302,15 @@ esttab model*  using "`filename'", style(tex) stats(r2 N) star(* 0.10 ** 0.05 **
 estfe . model*, restore
 
 	restore
+end
+
+capture program drop gen_controls
+program gen_controls
+	global controls score_basic_amenities score_basic_equipment index_general_service index_anc_readiness urban hospital volume_base_total
+
+	global controls_without_urban score_basic_amenities score_basic_equipment index_general_service index_anc_readiness hospital volume_base_total
+
+	global controls_without_quality urban hospital volume_base_total
 end
 
 
