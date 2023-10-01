@@ -364,10 +364,19 @@ def compute_waiting_time(hiv_cleaned_numeric):
     """
         convert time info to int and compute waiting_time
     """
+
+
+    #hiv_cleaned_numeric['arrival_time_numeric'] = (hiv_cleaned_numeric['arrival_time_numeric']
+    #                                                .astype(int))
+    #hiv_cleaned_numeric['consultation_time_numeric'] = (hiv_cleaned_numeric['consultation_time_numeric']
+    #                                                    .astype(int))
+
+    # [ADDED] modified the lines above because it gave an error due to there being NaN 
     hiv_cleaned_numeric['arrival_time_numeric'] = (hiv_cleaned_numeric['arrival_time_numeric']
-                                                    .astype(int))
+                                                    .fillna(0).astype(int))
+
     hiv_cleaned_numeric['consultation_time_numeric'] = (hiv_cleaned_numeric['consultation_time_numeric']
-                                                        .astype(int))
+                                                        .fillna(0).astype(int))
 
     list_arrived = hiv_cleaned_numeric['arrival_time_numeric'].to_list()
     list_entered = hiv_cleaned_numeric['consultation_time_numeric'].to_list()
@@ -421,6 +430,8 @@ def load_hiv_endline(hiv_end_df):
 
     #hiv_cleaned_numeric = hiv_end_df
     hiv_cleaned_numeric["waiting_time"] = None
+
+    hiv_cleaned_numeric['flag'].fillna(0, inplace=True) # [ADDED]
     non_flagged_itens = compute_waiting_time(hiv_cleaned_numeric.query("flag == 0"))
     hiv_cleaned_numeric.loc[hiv_cleaned_numeric["flag"] == 0, :] = non_flagged_itens
 
