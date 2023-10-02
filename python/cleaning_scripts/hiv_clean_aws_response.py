@@ -58,8 +58,12 @@ def append_line_dict_response(dict_response, file, facility, day, page, line,
         dict_response["col_9"].append(row.cells[9].text) # [ADDED]
 
     else:
+        try:
+            dict_response["col_5"].append(row.cells[5].text) # [ADDED] if col0 and 1 are empty, scheduled time will be in col5 so we need the data
+        except:
+            dict_response["col_5"].append("")
+
  #       dict_response["col_5"].append("") 
-        dict_response["col_5"].append(row.cells[5].text) # [ADDED] if col0 and 1 are empty, scheduled time will be in col5 so we need the data
         dict_response["col_6"].append("")
         dict_response["col_7"].append("")
         dict_response["col_8"].append("")
@@ -95,11 +99,10 @@ def process_tables():
                      "endline_US31_day10_page7.txt"] 
     
     #files to skip for scheduled time (all the ones for control clinics) [ADDED]
-    control_facilities = [1,3,5,7,9,13,15,17,19,21,23,25,29,31,33,35,37,39,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,73,75,77,79,80,81,83]
-    for file in responses_sample:
-        if int(file[10:(10+(file[10:].find("_")))]) in control_facilities:
-            files_to_skip = files_to_skip + [file]
-
+#    control_facilities = [1,3,5,7,9,13,15,17,19,21,23,25,29,31,33,35,37,39,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,73,75,77,79,80,81,83]
+#    for file in responses_sample:
+#        if int(file[10:(10+(file[10:].find("_")))]) in control_facilities:
+#            files_to_skip = files_to_skip + [file]
     for file in responses_sample:
         if file in files_to_skip:
             continue
@@ -131,7 +134,10 @@ def process_tables():
             continue
 
         #append_coordinates(dict_lengths, file, facility, day, page, table.rows[0], i+1)
-        facility, day, page = get_facility_day_page(file)
+        try:
+            facility, day, page = get_facility_day_page(file)
+        except:
+            print("file_name does not have the usual format: " + file)
 
         for i, row in enumerate(table.rows):
             if page == 3 and i == 0:
@@ -451,7 +457,7 @@ def load_hiv_endline(hiv_end_df):
     hiv_cleaned_numeric["line"] = (hiv_cleaned_numeric["line"].astype(int))
 
     hiv_cleaned_numeric = hiv_cleaned_numeric[["file_name", "facility", 
-                                               "day", "page", "line", 
+                                               "day", "day_of_week", "page", "line", 
                                                "arrival_time","consultation_time", 
                                                "scheduled_time", "treatment", 
                                                "waiting_time", "flag", "empty"]]
