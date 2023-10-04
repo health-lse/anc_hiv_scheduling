@@ -159,3 +159,21 @@ def get_facility_day_page(file_name):
                         .replace(".txt", ""))
     return facility, day, page
 assert get_facility_day_page("endline_US10_day11_page3.txt") == (10, 11, 3)
+
+import numpy as np
+def time_to_time_float(time):
+    """ transforms 730 into 7.5 """
+    if not time:
+        return np.nan
+    if np.isnan(time):
+        return time
+    if time == "":
+        return np.nan
+    if len(str(time)) < 3:
+        return np.nan
+
+    time = str(time)
+    size = len(time)
+    hour = float(time[0:(size-2)])
+    minute = float(time[(size-2):size])
+    return hour + round(minute/60, 2)
