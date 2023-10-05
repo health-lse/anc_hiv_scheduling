@@ -43,23 +43,14 @@ import delimited "${RAW}hiv_endline.csv", clear
 * add facility variables
 rename facility facility_cod
 local fac_vars province maputo high_quality gaza_inhambane score_basic_amenities ///
-    score_basic_equipment index_general_service index_anc_readiness urban hospital /// 
-    volume_base_total index_*
+    score_basic_equipment urban hospital volume_base_total index_*
 merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", keepusing(`fac_vars') ///
     keep(match) nogen
 
-*** 1.1. clean the waiting time variable  ------------------------
-sum waiting_time, d 
-* by construction, if one of the two columns has less than 3 digits, the value is set to -1. Also, 
-*       in some cases consultation time may be misread by textract --> negative value
-*   [ISSUE] large positive values when arrival time is misread: harder to fix this. Should we winsorize at the 99%?
-*   [QUESTION] sometimes,the time is in the format: HH:M, it should be HH:0M. Maybe worth fixing in the script
-replace waiting_time = . if waiting_time < 0
+*** 1.1. create the complier definitions based on hiv data  ------------------------
+clean_timevar scheduled_time
 
-
-*** 1.2. create the complier definitions based on hiv data  ------------------------
 preserve
-
     gen scheduled = scheduled_time > 0
     gen scheduled10 = scheduled_time > 1000 
 
@@ -97,30 +88,6 @@ preserve
 restore
 merge m:1 facility_cod using `complier', nogen 
 
-/*
-tab complier complier_hiv, m 
-           |    This (treated)
-           |  facility scheduled
-           | more than 20% of the
-           |     hiv check-ups
- Treatment |         0          1 |     Total
------------+----------------------+----------
-         0 |    17,120      1,572 |    18,692 
-         1 |     5,422      5,245 |    10,667 
-         . |       346          0 |       346 
------------+----------------------+----------
-     Total |    22,888      6,817 |    29,705 
-
-*/
-
-*** 1.2. Flag observations  ------------------------
-gen before_7 = (arrival_time <= 700)
-gen more_than_3 = (waiting_time >= 180) if !missing(waiting_time)
-
-label_vars_hiv
-label var before_7      "The patient arrived before 7am"
-label var more_than_3   "The patient waited for more than 3 hours" 
-
 save "${DATA}cleaned_data/hiv_endline.dta", replace
 
 
@@ -130,7 +97,7 @@ save "${DATA}cleaned_data/hiv_endline.dta", replace
 *use "${DATA}/cleaned_data/anc_cpn_endline_v20230704.dta", clear
 
 
-*** 1.3. import csv after review  ------------------------
+*** 1.2. import csv after review ------------------------
 global csv_review "/Users/vincenzoalfano/Library/CloudStorage/Dropbox/Simon/Health/Data/OCR_HIV/csvs_after_review/"
 import delimited "${csv_review}1.csv", clear
 
@@ -144,23 +111,60 @@ forvalues i=2/83 {
     append using `csv'
 }
 
+keep file_name line *time
 rename (arrival_time consultation_time waiting_time) (arrival_time2 consultation_time2 waiting_time2)
 duplicates drop 
 
+* merged with the new data
 replace line = line + 1
 merge 1:1 file_name line using "${DATA}cleaned_data/hiv_endline.dta"
 
-order file_name facility facility_cod page day line arri* cons* wait*
-bro file_name facility facility_cod page day line arri* cons* wait*
+* keep the reviewed arrival and consultation time when possible
+replace arrival_time = arrival_time2 if !missing(arrival_time2)
+replace consultation_time = consultation_time2 if !missing(consultation_time2)
 
-gen diff_arrival = (arrival_time2 != arrival_time)
-gen diff_consultation = (consultation_time2 != consultation_time)
-gen diff_waiting = (waiting_time2 != waiting_time)
-gen diff_any = diff_arrival + diff_consultation + diff_waiting
+clean_timevar arrival_time consultation_time 
 
-order file_name facility facility_cod day page line diff* arri* consultation_time consultation_time2 wait* 
-bro file_name facility facility_cod day page line arri* consultation_time consultation_time2 wait* if diff_any> 0
+* compute new time floats:
+cap drop consultation_time_float
+timestr_to_float arrival_time, varname("arrival_time_float")
+timestr_to_float consultation_time, varname("consultation_time_float")
 
+gen new_wait = round((consultation_time_float - arrival_time_float)*60,1)
+replace new_wait = -1 if new_wait<0
+
+* drop other observations with errors
+drop if consultation_time > 1600
+drop if arrival_time > 1600
+
+* drop observations with minutes of arrival/consultation above 59
+drop if flag_m_arrival_time
+drop if flag_m_consultation_time
+
+replace waiting_time = new_wait
+drop new_wait _m *2 flag_*
+
+*** 1.3. Flag observations  ------------------------
+gen before_7 = (arrival_time <= 700)
+gen more_than_3 = (waiting_time >= 180) if !missing(waiting_time)
+
+label_vars_hiv
+label var before_7      "The patient arrived before 7am"
+label var more_than_3   "The patient waited for more than 3 hours" 
+
+
+save "${DATA}cleaned_data/hiv_endline.dta", replace
+
+/*
+* manual cleaning
+replace consultation_time = 11:42 if file_name=="endline_US43_day12_page4.txt" & line==1 
+
+
+facility-day-page with no consultation time in the split image:
+--- endline_US25_day1_page5.png
+
+--- endline_US43_day12_page4.txt
+*/
 
 ************************************************************************************
 *** 2. Regressions
@@ -179,7 +183,7 @@ gen_controls
 * drop outliers (above 95%) 
 sum waiting_time, d
 *keep if waiting_time <  r(p95) | missing(waiting_time)
-keep if waiting_time <  r(p95)
+keep if waiting_time <  r(p99)
 
 * should we drop outliers in time_arrived_float as well?
 sum time_arrived_float, d
@@ -187,19 +191,18 @@ sum time_arrived_float, d
                         time_arrived_float
     -------------------------------------------------------------
         Percentiles      Smallest
-    1%         5.98              1
-    5%         6.67              1
-    10%            7              1       Obs              19,545
-    25%         8.27              1       Sum of wgt.      19,545
+    1%            6           1.02
+    5%          6.5            1.1
+    10%            7           1.23       Obs              24,562
+    25%         8.22           1.42       Sum of wgt.      24,562
 
-    50%         9.45                      Mean           9.508135
-                            Largest       Std. dev.      1.843707
-    75%        10.67          15.28
-    90%        11.95          15.33       Variance       3.399257
-    95%        12.67          15.33       Skewness       .0470113
-    99%        14.05          15.38       Kurtosis       3.595751
+    50%         9.42                      Mean           9.489071
+                            Largest       Std. dev.      1.822012
+    75%        10.67          15.33
+    90%        11.88          15.33       Variance       3.319729
+    95%        12.65          15.38       Skewness       .1988616
+    99%        14.03          15.45       Kurtosis       2.914319
 */
-
 
 foreach var in time_arrived_float waiting_time more_than_3  before_7 {
 

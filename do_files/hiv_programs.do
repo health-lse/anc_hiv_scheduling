@@ -274,4 +274,42 @@ syntax varlist() [if] [ , absorb(namelist) filename(string) controls(namelist) l
 end
 
 
+capture program drop timestr_to_float
+program timestr_to_float
+    syntax varlist(max=1) [if] [ , varname(string)]
 
+    gen hours = substr(string(`varlist'),1,(strlen(string(`varlist'))-2)) 
+    gen minutes = substr(string(`varlist'),-2,2) 
+    destring hours minutes, replace force
+    gen `varname' = hours + round(minutes/60,0.01)
+
+    * label observations with minutes/hours out of range
+    gen flag_m_`varlist' = (minutes>59) if !missing(minutes)
+    gen flag_h_`varlist' = (hours>23)  if !missing(hours)
+    drop hours minutes 
+end
+
+
+capture program drop clean_timevar
+program clean_timevar
+    syntax varlist 
+    cap drop len 
+    cap drop hours
+    cap drop str
+    foreach var of  local varlist {
+        cap drop `var'_str
+        tostring `var', gen(str) force
+        gen len = strlen(str)
+
+        replace str = cond(substr(str, 3,1) == "4" & len==5, substr(str, 1,2) + substr(str, 4,2), str)
+
+        gen hours = substr(str,1,(len-2))
+        destring hours, replace force
+        * fix cases where textract misread 11 as 44 for the hours
+        replace str = "11" + substr(str, 3,2) if hours == 44 & len==4
+
+        replace str = cond(substr(str, 2,1) == "4" & len==4 & hours>23, substr(str, 1,1) + substr(str, 3,2), str)
+        gen `var'_str = str
+        drop len str hours
+    }
+end
