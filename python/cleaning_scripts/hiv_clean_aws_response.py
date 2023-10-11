@@ -98,11 +98,7 @@ def process_tables():
                      "endline_US31_day10_page6.txt",
                      "endline_US31_day10_page7.txt"] 
     
-    #files to skip for scheduled time (all the ones for control clinics) [ADDED]
-#    control_facilities = [1,3,5,7,9,13,15,17,19,21,23,25,29,31,33,35,37,39,43,45,47,49,51,53,55,57,59,61,63,65,67,69,71,73,75,77,79,80,81,83]
-#    for file in responses_sample:
-#        if int(file[10:(10+(file[10:].find("_")))]) in control_facilities:
-#            files_to_skip = files_to_skip + [file]
+
     for file in responses_sample:
         if file in files_to_skip:
             continue
@@ -305,20 +301,24 @@ def find_times_df_2_tables(response_df):
 
 def flag_incorrect_obs(response_df):
     """
-        Flag itens with errors to be reviewed later
+        Flag items with errors to be reviewed later
     """
     response_df.loc[pd.isnull(response_df["consultation_time"]), "flag"] = 1
     response_df.loc[pd.isnull(response_df["arrival_time"]), "flag"] = 1
     response_df.loc[pd.isnull(response_df["scheduled_time"]), "flag"] = 1
 
+    # clean the time variables
     response_df["arrival_time_cleaned"] = remove_special_characters(
-                                            response_df["arrival_time"])
+            response_df["arrival_time"]).apply(misread_h)
 
     response_df["consultation_time_cleaned"] = remove_special_characters(
-                                            response_df["consultation_time"])
-    
+            response_df["consultation_time"]).apply(misread_h)
+
+    # hour range cleans observations where scheduled time takes the form of an hour range (e.g. 8H9H), returning the midpoint
     response_df["scheduled_time_cleaned"] = remove_special_characters(
-                                            response_df["scheduled_time"])
+            response_df["scheduled_time"])
+    response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].str.replace("#", "H").apply(misread_h_scheduled)
+    response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].apply(hour_range)
 
     response_df.loc[response_df["arrival_time_cleaned"]=="", "flag"] = 1
     response_df.loc[response_df["consultation_time_cleaned"]=="", "flag"] = 1
@@ -326,7 +326,7 @@ def flag_incorrect_obs(response_df):
 
     response_df["arrival_time_cleaned"] = response_df["arrival_time_cleaned"].apply(clean_time_with_h)
     response_df["consultation_time_cleaned"] = response_df["consultation_time_cleaned"].apply(clean_time_with_h)
-    response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].apply(clean_time_with_h)
+    response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].astype(str).apply(clean_time_with_h)
 
     response_df['arrival_time_numeric'] = pd.to_numeric(
                                             response_df['arrival_time_cleaned'],

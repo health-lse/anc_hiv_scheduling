@@ -10,8 +10,11 @@ import json
 from trp import Document
 from os import listdir
 
-ROOT = "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling/data/"
-baseline_path=f"{ROOT}/hiv/baseline/aws_files"
+ROOT = "/Users/vincenzoalfano/LSE - Health/anc_hiv_scheduling/data"
+baseline_path=f"/Users/vincenzoalfano/LSE - Health/anc_hiv_scheduling/data/hiv/baseline/baseline_aws_response"
+#ROOT = "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling/data/"
+#baseline_path=f"{ROOT}/hiv/baseline/aws_files"
+""
 cleaned_data=f"{ROOT}/cleaned_data"
 
 def get_facility_page(file_name):

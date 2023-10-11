@@ -26,7 +26,8 @@ def remove_special_characters(column):
              .str.replace("l", "") 
              .str.replace("u", "") 
              .str.replace("t", "") 
-             .str.replace("s", "")             
+             .str.replace("s", "")    
+             .str.replace("h", "H")     
              )
 
 
@@ -68,6 +69,47 @@ def mask_time(text):
 assert mask_time("1H-20M") == "DHSDDA"
 assert mask_time("7H") == "DH"
 
+
+# checks for observations where the character "h" (within the first three characters of a string) is misread as a 4 
+def misread_h(text):
+    if len(str(text)) > 3 and str(text)[0:2] in ["64", "74", "84", "94"]:
+        return str(text)[0:1] + "H" + str(text)[2:]
+    if len(str(text)) == 4 and str(text)[0:2] in ["44"]: # there are few observations where the hour 11 is misread as 44
+        return "11" + str(text)[2:]
+    if len(str(text)) > 4 and str(text)[0:3] in ["104", "124", "114"]:
+        return str(text)[0:2] + "H" + str(text)[3:]
+    if len(str(text)) > 4 and str(text)[0:3] in ["811", "711", "911"]:
+        return str(text)[0:1] + "H" + str(text)[3:]
+    else: 
+        return text
+
+# given that sometimes the scheduled appointment is a range of one hour, we also have to clean "h" at the end of the string
+def misread_h_scheduled(text):
+    if len(str(text)) > 3 and str(text)[0:2] in ["64", "74", "84", "94"]:
+        return str(text)[0:1] + "H" + str(text)[2:]
+    if len(str(text)) == 4 and str(text)[0:2] in ["44"]: # there are few observations where the hour 11 is misread as 44
+        return 11 + str(text)[2:]
+    if len(str(text)) > 4 and str(text)[0:3] in ["104", "124", "114"]:
+        return str(text)[0:2] + "H" + str(text)[3:]
+    if len(str(text)) > 4 and str(text)[0:3] in ["811", "711", "911"]:
+        return str(text)[0:1] + "H" + str(text)[3:]
+    if len(str(text)) > 3 and str(text)[-2:] in ["94", "84", "74"]:
+        return str(text)[:-1] +  "H"
+    if len(str(text)) > 4 and str(text)[-3:] in ["104", "114", "124", "134"]:
+        return str(text)[:-1] +  "H"
+    else:
+        return text
+    
+# hour range cleans observations where scheduled time takes the form of an hour range (e.g. 8H9H), returning the midpoint
+def hour_range(text):
+    formats = ("DHDH", "DDHDDH", "DHDDH","DDHDH")
+    if isinstance(text, float):
+        return text
+    if mask_time(text) in formats:
+        return ((int(text.split("H")[0]) + int(text.split("H")[1]))/2) # [QUESTION] is it okay to return the midpoint? or should we report the minimum
+    else: 
+        return text
+    
 import numpy as np
 import pandas as pd
 def clean_time_with_h(time):
@@ -76,6 +118,9 @@ def clean_time_with_h(time):
     if time == None or time == "" or pd.isna(time):
         return time
 
+    if isinstance(time, bool):
+        return time
+    
     cleaned = time
     size = len(cleaned)
 
@@ -98,6 +143,7 @@ def clean_time_with_h(time):
     if mask.endswith("HDD"):
         cleaned = cleaned.replace("h", "")
         cleaned = cleaned.replace("H", "")
+
     return cleaned.replace("o", "0").replace("M", "11")
 
 assert clean_time_with_h("705") == "705"
@@ -110,8 +156,6 @@ assert clean_time_with_h("12H") == "1200"
 assert clean_time_with_h("12H05") == "1205"
 assert clean_time_with_h("H12H05") == "1205"
 assert clean_time_with_h("H705") == "705"
-
-
 
 from datetime import datetime
 def time_diff(final_time, initial_time):

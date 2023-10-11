@@ -172,6 +172,68 @@ program hiv_reg_het
 	restore
 end
 
+
+capture program drop hiv_reg_het_noabsorb
+program hiv_reg_het_noabsorb
+	syntax varlist( max=1) [if] [ , filename(string) controls(namelist) het_var(namelist) ]
+	preserve
+	if `"`if'"' != "" {
+		keep `if'
+	}
+
+	di `interaction'
+	global outcome `1'
+	global fixed_effects `absorb'
+	global controls_reg `controls'
+
+	eststo clear
+	estimates clear
+
+	qui reghdfe $outcome c.treatment##c.`het_var', noabsorb vce(cl facility_cod)
+	qui sum $outcome if treatment==0
+	qui estadd scalar control_mean= r(mean)
+	qui estadd scalar control_std= r(sd)
+	add_scalars_hiv
+	qui estimates store model1, title("OLS")
+
+	qui reghdfe $outcome c.treatment##c.`het_var' $controls_reg, noabsorb vce(cl facility_cod)
+	add_scalars_hiv
+	qui estimates store model2, title("OLS")
+	
+	rename treatment treatment_iv
+	rename complier treatment
+	
+	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var'), cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model3, title("IV")
+
+	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var') $controls_reg, cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model4, title("IV")
+	
+	drop treatment
+	rename complier10 treatment
+	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var'), cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model5, title("IV ( \geq 10am) ")
+
+	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var') $controls_reg, cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model6, title("IV ( \geq 10am) ")
+	
+	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
+	//return list
+
+	esttab  *, stats(control_mean control_std iv_stat  n_compliers  r2 N, label( "Control Mean" "Control SD" "KP Wald F stat" "Compliers"  "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace interaction(" X ") label
+	
+	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
+	
+	esttab * using "`filename'", style(tex) stats(control_mean control_std iv_stat n_compliers  r2 N, label( "Control Mean" "Control SD" "KP Wald F stat" "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace interaction(" X ") label
+	estfe . model*, restore
+
+	restore
+end
+
 capture program drop hiv_group_reg
 program hiv_group_reg
 	syntax varlist( max=1) [if] [ , suffix(string) ]
@@ -180,7 +242,6 @@ program hiv_group_reg
 	hiv_group_reg_custom_fe $outcome , suffix(`suffix') absorb(province day_of_week) absorb_maputo_reg(day_of_week)
 
 end
-
 
 capture program drop hiv_group_reg_custom_fe
 program hiv_group_reg_custom_fe
@@ -206,9 +267,6 @@ program gen_quality_pca
 	qui pca index_hiv_care_readiness index_hiv_counseling_readiness index_general_service score_basic_amenities score_basic_equipment
 	qui predict quality_pca
 end
-
-
-
 
 capture program drop hiv_volume_reg
 program hiv_volume_reg
@@ -289,7 +347,7 @@ program timestr_to_float
     drop hours minutes 
 end
 
-
+* program that clears observations where Textract misread the character "h" as 4:
 capture program drop clean_timevar
 program clean_timevar
     syntax varlist 
