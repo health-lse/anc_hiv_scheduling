@@ -145,7 +145,6 @@ def process_tables():
     hiv_end_df = pd.DataFrame(dict_response)
     return hiv_end_df
 
-
 def flag_empty_lines(hiv_end_df):
     """
         the last lines of a day are empty, this
@@ -315,9 +314,9 @@ def flag_incorrect_obs(response_df):
             response_df["consultation_time"]).apply(misread_h)
 
     # hour range cleans observations where scheduled time takes the form of an hour range (e.g. 8H9H), returning the midpoint
-    response_df["scheduled_time_cleaned"] = remove_special_characters(
-            response_df["scheduled_time"])
-    response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].str.replace("#", "H").apply(misread_h_scheduled)
+    response_df["scheduled_time_cleaned"] = remove_special_characters(response_df["scheduled_time"]).str.replace("#", "H").str.replace("h", "H")
+ #   response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].str.replace("#", "H").apply(misread_h_scheduled)
+    response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].apply(misread_h_scheduled)
     response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].apply(hour_range)
 
     response_df.loc[response_df["arrival_time_cleaned"]=="", "flag"] = 1

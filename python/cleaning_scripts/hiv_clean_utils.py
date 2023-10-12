@@ -18,7 +18,7 @@ def remove_special_characters(column):
              .str.replace("i", "")
              .str.replace("-", "")
              .str.replace("M", "")
-             .str.replace("r", "") # this line and those below where added to clean the scheduled_time column
+             .str.replace("r", "") 
              .str.replace("W", "") 
              .str.replace("w", "") 
              .str.replace("m", "") 

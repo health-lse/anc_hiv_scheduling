@@ -37,6 +37,7 @@ global hiv_dataset "data/cleaned_data/anc_cpn_endline_v20230704.dta"
 *** 0.3. import the relevant packages and programs
 do do_files/hiv_programs
 *ssc install erepost
+*ssc install fuzzydid
 
 
 ************************************************************************************
@@ -45,12 +46,17 @@ do do_files/hiv_programs
  
 import delimited "${RAW}hiv_endline.csv", clear
 
+
 * add facility variables
 rename facility facility_cod
 local fac_vars province maputo high_quality gaza_inhambane score_basic_amenities ///
     score_basic_equipment urban hospital volume_base_total index_*
 merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", keepusing(`fac_vars') ///
     keep(match) nogen
+
+
+* manual cleaning
+do do_files/hiv_manual_cleaning
 
 *** 1.1. create the complier definitions based on hiv data  ------------------------
 clean_timevar scheduled_time
@@ -69,10 +75,10 @@ preserve
 *    label var full_complier_hiv      "This (treated) facility scheduled more than 70% of the hiv consultations"
     label var complier10        "This (treated) facility scheduled after 10am more than 20% of the hiv consultations"
  
-/*  Some control facilities scheduled some consultations. Issue? Especially facility code 61 has a 22% of scheduled visits
     sum scheduled_share if treatment==0, d
-
-                      (mean) scheduled
+/*  Some control facilities scheduled some consultations. Issue? Especially facility code 61 has a 22% of scheduled visits
+ 
+        Share of scheduled consultations in the facility
     -------------------------------------------------------------
         Percentiles      Smallest
     1%            0              0
@@ -80,12 +86,12 @@ preserve
     10%            0              0       Obs                  40
     25%            0              0       Sum of wgt.          40
 
-    50%     .0071608                      Mean           .0295734
-                            Largest       Std. dev.      .0520933
+    50%     .0071608                      Mean           .0294342
+                            Largest       Std. dev.      .0514655
     75%     .0287366       .1027668
-    90%     .1022719       .1164021       Variance       .0027137
-    95%     .1523187       .1882353       Skewness       2.398116
-    99%     .2290076       .2290076       Kurtosis       8.410827
+    90%     .1022719       .1164021       Variance       .0026487
+    95%     .1552599       .1941177       Skewness       2.337361
+    99%     .2175573       .2175573       Kurtosis       7.977706
 */
 
     save "${DATA}cleaned_data/hiv_complier_facilities.dta", replace
@@ -161,34 +167,6 @@ label var more_than_3   "The patient waited for more than 3 hours"
 save "${DATA}cleaned_data/hiv_endline.dta", replace
 
 
-/*
-* manual cleaning
-
-** arrival_time
-replace arrival_time = 1032 if file_name=="endline_US10_day5_page5.txt" & line==3
-replace arrival_time = 848 if file_name=="endline_US10_day7_page7.txt" & line==3
-replace arrival_time = 849 if file_name=="endline_US10_day7_page7.txt" & line==4
-
-** consultation_time
-replace consultation_time = 1142 if file_name=="endline_US43_day12_page4.txt" & line==1 
-
-** scheduled_time
-replace scheduled = 1030 if file_name=="endline_US30_day10_page5.txt" & line==5
-replace scheduled = 830 if file_name=="endline_US30_day10_page5.txt" & line==6
-replace scheduled = 830 if file_name=="endline_US30_day4_page5.txt" & line==2
-replace scheduled = 1030 if file_name=="endline_US30_day4_page8.txt" & line==5
-replace scheduled = 830 if file_name=="endline_US30_day6_page6.txt" & line==6
-replace scheduled = 1030 if file_name=="endline_US30_day7_page8.txt" & line==7 // it is equal ot 1041111, should be 10H11H
-replace scheduled = . if file_name=="endline_US61_day5_page3.txt"  // the whole page
-
-
-
-facility-day-page with no consultation time in the split image:
---- endline_US25_day1_page5.png
-
---- endline_US43_day12_page4.txt
-*/
-
 ************************************************************************************
 *** 2. Endline
 ************************************************************************************
@@ -210,6 +188,8 @@ keep if waiting_time <  r(p99)
 
 * should we drop outliers in time_arrived_float as well?
 sum time_arrived_float, d
+keep if time_arrived_float <  r(p99)
+
 /*
                         time_arrived_float
     -------------------------------------------------------------
@@ -231,20 +211,31 @@ foreach var in time_arrived_float waiting_time more_than_3  before_7 {
 
     global outcome_var `var'
     hiv_group_reg $outcome_var , suffix("hiv")
-
 }
 
 *** 2.2. OPENING TIME  ------------------------
 
 use "data/cleaned_data/opening_time.dta", clear
-capture drop _merge
-label_vars_anc
 
-merge m:1 facility_cod using "data/aux/facility_characteristics.dta"
-drop _merge
+capture drop _merge
+
+preserve
+    use "${DATA}cleaned_data/hiv_endline.dta", clear
+    local fac_vars maputo high_quality gaza_inhambane score_basic_amenities ///
+        score_basic_equipment urban hospital volume_base_total index_*
+    desc `fac_vars' 
+    collapse `fac_vars' treatment complier complier10, by(facility_cod province)
+
+    tempfile facility_characteristics
+    save `facility_characteristics'
+restore
+
+merge m:1 facility_cod using `facility_characteristics', keep(match) nogen
+gen_controls
 label_vars_hiv
 
-hiv_group_reg opening_time, suffix("hiv")
+global outcome_var opening_time
+hiv_group_reg $outcome_var , suffix("hiv")
 
 
 *** 2.3. NUMBER OF VISITS  ------------------------
@@ -297,10 +288,6 @@ ivreghdfe hiv_followup c.quarter1 c.quarter2 c.quarter3 (complier c.complier##c.
 
 ivreghdfe $outcome c.post (complier10 c.complier10##c.post = treatment c.treatment##c.post)  $controls_vol , absorb(month ) cluster(facility_cod)
 */
-
-
-
-
 
 ************************************************************************************
 *** 3. Baseline regressions
@@ -355,17 +342,58 @@ keep if waiting_time <  r(p99)
 gen_controls
 label_vars_hiv
 
-* create a page_bin to use as fixed effect instead of day
-gen page_bin = ceil(page/10)
-
-
 global outcome waiting_time
 global absorb province
 local suffix "hiv_baseline"
 hiv_reg $outcome , controls($controls) absorb($absorb) filename("tables/waiting_time_`suffix'.tex")
 
-hiv_reg_het_noabsorb $outcome , controls($controls) filename("tables/waiting_time_maputo_`suffix'.tex") het_var(maputo)
+*hiv_reg_het_noabsorb $outcome , controls($controls) filename("tables/waiting_time_maputo_`suffix'.tex") het_var(maputo)
+hiv_reg_het $outcome , controls($controls) absorb($absorb) filename("tables/waiting_time_maputo_`suffix'.tex") het_var(maputo)
 
 hiv_reg_het $outcome , controls($controls_without_urban) absorb($absorb) filename("tables/waiting_time_urban_`suffix'.tex") het_var(urban)
 
 hiv_reg_het $outcome , controls($controls_without_quality) absorb($absorb) filename("tables/waiting_time_high_quality_`suffix'.tex") het_var(high_quality)
+
+
+
+************************************************************************************
+*** 4. DiD REGRESSIONS
+************************************************************************************
+
+use "${DATA}cleaned_data/hiv_baseline.dta", clear
+
+gen post = 0
+append using "${DATA}cleaned_data/hiv_endline.dta"
+replace post = 1 if missing(post)
+
+* drop facilities appearing only in baseline or endline
+bys facility_cod (post): egen temp = mean(post) 
+tab facility_cod if inlist(temp,0,1)
+drop if inlist(temp,0,1)
+drop temp
+
+* drop outliers (above 99%) 
+sum waiting_time, d
+keep if waiting_time <  r(p99)
+
+* create the control macros 
+gen_controls
+label_vars_hiv
+
+global outcome waiting_time
+global absorb province
+local suffix "hiv_did"
+
+hiv_did $outcome , controls($controls) absorb($absorb) filename("tables/$outcome_`suffix'.tex")
+
+hiv_did_het $outcome , controls($controls) absorb($province) filename("tables/$outcome_maputo_`suffix'.tex") het_var(maputo)
+
+hiv_did_het $outcome , controls($controls_without_urban) absorb($absorb) filename("tables/$outcome_urban_`suffix'.tex") het_var(urban)
+
+hiv_did_het $outcome , controls($controls_without_quality) absorb($absorb) filename("tables/$outcome_high_quality_`suffix'.tex") het_var(high_quality)
+
+
+* Fuzzy 
+encode province, gen(province_id)
+fuzzydid $outcome treatment post complier, did cluster(facility_cod) 
+fuzzydid $outcome treatment post complier, did cluster(facility_cod) qualitative(facility_cod province_id) 
