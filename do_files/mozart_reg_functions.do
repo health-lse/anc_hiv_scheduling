@@ -7,13 +7,25 @@ program gen_controls
 	rename pac_age age
 	global controls_patient woman age 
 
-	global controls_facility index_HIV_care_readiness ART_different_lines ART_general hand_wash dayaverage urban CD4 score_basic_amenities score_basic_equipment HIV_diagnostic_capacity index_general_service
+	global controls_facility index_hiv_care_readiness art_different_lines art_general hand_wash dayaverage urban cd4 score_basic_amenities score_basic_equipment hiv_diagnostic_capacity index_general_service
 
-	global controls index_HIV_care_readiness ART_different_lines ART_general hand_wash dayaverage urban CD4 score_basic_amenities score_basic_equipment HIV_diagnostic_capacity index_general_service $controls_patient 
+	global controls index_hiv_care_readiness art_different_lines art_general hand_wash dayaverage urban cd4 score_basic_amenities score_basic_equipment hiv_diagnostic_capacity index_general_service $controls_patient 
 
 	di "controls generated"
 end
 
+
+/* Add scalar info to the bottom of the tables */
+capture program drop add_scalars_hiv
+program add_scalars_hiv
+
+	qui distinct facility_cod
+	qui estadd scalar n_facilities = r(ndistinct)
+	qui distinct facility_cod if treatment == 1
+	qui estadd scalar n_compliers = r(ndistinct)
+	qui capture estadd scalar iv_stat = e(widstat)
+	
+end
 
 // Run 4 regressions:
 // 1. no controls, period and province FE, cluster: facility
@@ -33,17 +45,50 @@ program mozart_reg
 	eststo clear
 	estimates clear
 
-	reghdfe $outcome treatment, a( period province) vce(cl facility_cod)
+	reghdfe $outcome treatment, a( period province) cluster(facility_cod)
 	qui sum `e(depvar)' if e(sample)
-	estadd scalar Mean= r(mean)
-	estimates store model1
+	qui estadd scalar control_mean= r(mean)
+	qui estadd scalar control_std= r(sd)
+	*add_scalars_hiv
+	qui estimates store model1, title("OLS")
 
-	reghdfe $outcome treatment $controls, a( period province)  vce(cl facility_cod)
-	estimates store model2
+	reghdfe $outcome treatment $controls, a( period province)  cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model2, title("OLS")
+
+
+	rename treatment treatment_iv
+	rename complier treatment
+	qui ivreghdfe $outcome (treatment=treatment_iv), absorb(period province) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model3, title("IV")
+
+	qui ivreghdfe $outcome $controls (treatment=treatment_iv), absorb(period province) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model4, title("IV")
+
+	drop treatment
+	rename complier10 treatment
+	qui ivreghdfe $outcome (treatment=treatment_iv), absorb(period province) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model5, title("IV ( \geq 10am) ")
+
+	qui ivreghdfe $outcome $controls (treatment=treatment_iv), absorb(period province) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model6, title("IV ( \geq 10am) ")
+
+
 
 	estfe . model* , labels(province "Province FE" period "Month FE")
-	esttab model*   using "`filename'", drop(_cons) style(tex) stats(Mean r2 N) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls" `r(indicate_fe)') se replace
+	
+	esttab  *, stats(control_mean control_std iv_stat  n_compliers  r2 N, label( "Control Mean" "Control SD"  "Kleibergen-Paap Wald F stat." "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace label
+
+
+	estfe . model*, labels(province "Province FE" period "Month FE")
+
+	esttab * using "`filename'", style(tex) stats(control_mean control_std iv_stat  n_compliers  r2 N, label( "Control Mean" "Control SD" "Kleibergen-Paap Wald F stat."  "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace label
 	estfe . model*, restore
+
 	restore
 end
 
