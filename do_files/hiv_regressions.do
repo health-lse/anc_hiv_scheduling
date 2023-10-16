@@ -13,6 +13,7 @@
 *   ${DATA}aux/facility_characteristics.dta
 *	hiv_baseline.csv: dataset produced by the hiv_baseline_aws_clean.py
 *   opening_time.dta: in the cleaned_data folder, used for the opening time analysis
+*   "${DATA}cleaned_data/hiv_pickups_ym.dta", from panel_mozart.do used for the volume analysis
 
 *** 0.1.2. Output datasets
 *   hiv_endline.dta
@@ -240,54 +241,96 @@ hiv_group_reg $outcome_var , suffix("hiv")
 
 *** 2.3. NUMBER OF VISITS  ------------------------
 
-/* [ISSUE] need the id variable to create number of visits per patient!
+use "${DATA}cleaned_data/hiv_patients_pickups.dta", clear
 
-use "${DATA}cleaned_data/hiv_endline.dta", clear
+merge m:1 facility_cod using "${DATA}cleaned_data/hiv_complier_facilities.dta", nogen 
+merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", nogen 
 
 * create the control macros 
 gen_controls
-
-* need to
-
-* drop outliers (above 99%) 
-sum waiting_time, d
-*keep if waiting_time <  r(p95) | missing(waiting_time)
-keep if waiting_time <  r(p99)
-
 label_vars_hiv
 
-label var number_of_visits "Number of visits"
+label var nid_nvisits "Number of visits"
 
-hiv_group_reg_custom_fe number_of_visits , suffix("hiv") absorb(province month_1st) absorb_maputo_reg(month_1st)
-*/
+hiv_group_reg_custom_fe nid_nvisits , suffix("hiv_1stoverall") absorb(province first_month_overall) absorb_maputo_reg(first_month_overall)
+hiv_group_reg_custom_fe nid_nvisits , suffix("hiv_1st") absorb(province first_month_treat) absorb_maputo_reg(first_month_treat)
+
 
 *** 2.4. VOLUME  ------------------------
  
-/*  [ISSUE] need the hiv version of anc_followup (the number of follow-up visits by facility-year-month)
-use "${DATA}/cleaned_data/sisma_volume.dta", clear
+* import the dataset at the facility - month level (from panel_mozart.do)
+use "${DATA}cleaned_data/hiv_pickups_ym.dta", clear
 
-cap drop _merge
-merge m:1 facility_cod using "${DATA}cleaned_data/hiv_complier_facilities.dta", keepusing(complier complier10) keep(match) nogen
-*** [ISSUE] facilities 35 and 54 not in SISMA_volume!
+* merge facility characteristics
+merge m:1 facility_cod using "${DATA}cleaned_data/hiv_complier_facilities.dta", nogen 
+merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", nogen 
 
-replace quarter2 = 1 if quarter2 == 2
-replace quarter3 = 1 if quarter3 == 3
+tab quarter, gen(quarter)
 
-gen maputo = 0
-replace maputo = 1 if province == "Maputo Cidade"
-replace maputo = 1 if province == "Maputo Província"
+gen_controls
+label_vars_hiv
 
-rename (index_HIV_care_readiness index_HIV_counseling_readiness) (index_hiv_care_readiness index_hiv_counseling_readiness)
+* create the post variable [QUESTION] defined in the same way as the one used for anc, is it
+gen post = inrange(pickup_month, ym(2021,1), ym(2021,12))
+replace post = 1 if inrange(pickup_month, ym(2020,11), ym(2020,12)) & facility_cod > 41
+
+* post 42 onwards
+
+
+* [QUESTION] long time series, should I drop some of the earier years?
+
+
 global controls_vol score_basic_amenities score_basic_equipment index_general_service index_hiv_care_readiness index_hiv_counseling_readiness urban hospital
 
-hiv_volume_reg anc_followup , absorb(province) filename("vol_test.tex") controls($controls_vol )
+*hiv_volume_reg npickups, filename("tables/vol_test_hiv.tex") controls($controls_vol ) // the program gives an error
 
-reghdfe hiv_followup c.treatment##c.quarter1 c.treatment##c.quarter2 c.treatment##c.quarter3 $controls_vol, a(province) vce(cl facility_cod)
+foreach var in npickups n_nid {
+    global outcome `var'
+    preserve
+        global outcome npickups
+        eststo clear
+        estimates clear
 
-ivreghdfe hiv_followup c.quarter1 c.quarter2 c.quarter3 (complier c.complier##c.quarter1 c.complier##c.quarter2 c.complier##c.quarter3 = treatment c.treatment##c.quarter1 c.treatment##c.quarter2 c.treatment##c.quarter3) $controls_vol if maputo==1, a(month) cluster(facility_cod)
+        reghdfe $outcome c.treatment##c.post##c.maputo, absorb( month) vce(cl facility_cod)
+        estimates store model1, title("OLS")
+
+        reghdfe $outcome c.treatment##c.post##c.maputo $controls_vol, absorb( month) vce(cl facility_cod)
+        estimates store model2, title("OLS")
+
+        rename treatment treatment_iv
+        rename complier treatment
+        ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post) , absorb(month province) cluster(facility_cod)
+        estimates store model3, title("IV")
+
+        ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post)  $controls_vol , absorb(month province) cluster(facility_cod)
+        estimates store model4, title("IV")
+
+        drop treatment
+        rename complier10 treatment
+        ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post) , absorb(month province) cluster(facility_cod)
+        estimates store model5, title("IV")
+
+        ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post)  $controls_vol , absorb(month province) cluster(facility_cod)
+        estimates store model6, title("IV")
+
+        estfe . model*, labels(province "Province FE" month "Month FE")
+
+        local filename "tables/vol_test_hiv_`var'.tex"
+        esttab model*  using "`filename'", style(tex) stats(r2 N) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_vol" `r(indicate_fe)') drop(_cons ) se replace mlabels(,titles)
+
+        estfe . model*, restore
+    restore 
+}
+
+
+
+
+reghdfe npickups c.treatment##c.quarter1 c.treatment##c.quarter2 c.treatment##c.quarter3 $controls_vol, a(province) vce(cl facility_cod)
+
+ivreghdfe npickups c.quarter1 c.quarter2 c.quarter3 (complier c.complier##c.quarter1 c.complier##c.quarter2 c.complier##c.quarter3 = treatment c.treatment##c.quarter1 c.treatment##c.quarter2 c.treatment##c.quarter3) $controls_vol if maputo==1, a(month) cluster(facility_cod)
 
 ivreghdfe $outcome c.post (complier10 c.complier10##c.post = treatment c.treatment##c.post)  $controls_vol , absorb(month ) cluster(facility_cod)
-*/
+
 
 ************************************************************************************
 *** 3. Baseline regressions

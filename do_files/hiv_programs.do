@@ -409,24 +409,26 @@ program hiv_volume_reg
 	eststo clear
 	estimates clear
 
-	reghdfe $outcome c.treatment##c.post##maputo, a( month) vce(cl facility_cod)
+	reghdfe $outcome c.treatment##c.post##maputo, absorb( month) vce(cl facility_cod)
 	estimates store model1, title("OLS")
 
-	reghdfe $outcome c.treatment##c.post##maputo $controls_reg, a(  month) vce(cl facility_cod)
+	reghdfe $outcome c.treatment##c.post##maputo $controls_reg, absorb( month) vce(cl facility_cod)
 	estimates store model2, title("OLS")
 
-
-	ivreghdfe $outcome c.post (complier c.complier##c.post = treatment c.treatment##c.post) , absorb(month province) cluster(facility_cod)
+	rename treatment treatment_iv
+	rename complier treatment
+	ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post) , absorb(month province) cluster(facility_cod)
 	estimates store model3, title("IV")
 	
-	ivreghdfe $outcome c.post (complier c.complier##c.post = treatment c.treatment##c.post)  $controls_reg , absorb(month province) cluster(facility_cod)
+	ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post)  $controls_reg , absorb(month province) cluster(facility_cod)
 	estimates store model4, title("IV")
 
-
-	ivreghdfe $outcome c.post (complier10 c.complier10##c.post = treatment c.treatment##c.post) , absorb(month province) cluster(facility_cod)
+	drop treatment
+	rename complier10 treatment
+	ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post) , absorb(month province) cluster(facility_cod)
 	estimates store model5, title("IV")
 	
-	ivreghdfe $outcome c.post (complier10 c.complier10##c.post = treatment c.treatment##c.post)  $controls_reg , absorb(month province) cluster(facility_cod)
+	ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post)  $controls_reg , absorb(month province) cluster(facility_cod)
 	estimates store model6, title("IV")
 	
 /*	ivreghdfe $outcome (complier complier##quarter1 complier##quarter2 complier##quarter3 = treatment treatment##quarter1 treatment##quarter2 treatment##quarter3) $controls, absorb($fixed_effects) cluster(facility_cod)

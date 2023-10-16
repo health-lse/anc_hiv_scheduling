@@ -14,6 +14,17 @@ program gen_controls
 	di "controls generated"
 end
 
+capture program drop label_vars_hiv
+program define label_vars_hiv
+	label var treatment "Treatment"
+	label var complier "Treatment"
+	label var complier10 "Treatment"
+	capture label var high_quality "High Quality"
+	capture label var urban "Urban"
+	capture label var maputo "Maputo"
+	capture label var gaza_inhambane "Gaza/Inhamb."
+end
+
 
 /* Add scalar info to the bottom of the tables */
 capture program drop add_scalars_hiv
