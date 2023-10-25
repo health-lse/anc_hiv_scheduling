@@ -70,8 +70,11 @@ assert mask_time("1H-20M") == "DHSDDA"
 assert mask_time("7H") == "DH"
 
 
-# checks for observations where the character "h" (within the first three characters of a string) is misread as a 4 
+# 
 def misread_h(text):
+    """
+        checks for observations where the character "h" (within the first three characters of a string) is misread as a 4   
+    """
     if len(str(text)) > 3 and str(text)[0:2] in ["64", "74", "84", "94"]:
         return str(text)[0:1] + "H" + str(text)[2:]
     if len(str(text)) == 4 and str(text)[0:2] in ["44"]: # there are few observations where the hour 11 is misread as 44
@@ -83,8 +86,10 @@ def misread_h(text):
     else: 
         return text
 
-# given that sometimes the scheduled appointment is a range of one hour, we also have to clean "h" at the end of the string
 def misread_h_scheduled(text):
+    """
+        given that sometimes the scheduled appointment is a range of one hour, we also have to clean "h" at the end of the string  
+    """
     if len(str(text)) > 3 and str(text)[0:2] in ["64", "74", "84", "94"]:
         return str(text)[0:1] + "H" + str(text)[2:]
     if len(str(text)) == 4 and str(text)[0:2] in ["44"]: # there are few observations where the hour 11 is misread as 44
@@ -100,8 +105,10 @@ def misread_h_scheduled(text):
     else:
         return text
     
-# hour range cleans observations where scheduled time takes the form of an hour range (e.g. 8H9H), returning the midpoint
 def hour_range(text):
+    """
+        hour range cleans observations where scheduled time takes the form of an hour range (e.g. 8H9H), returning the midpoint
+    """
     formats = ("DHDH", "DDHDDH", "DHDDH","DDHDH")
     if isinstance(text, float):
         return text
@@ -110,6 +117,51 @@ def hour_range(text):
     else: 
         return text
     
+def clean_next(text):
+    """
+        this script cleans the variable next_scheduled_time: this variable is different from the other time ones as it starts
+        with a date, and then it has the appointment time. We are only interested in whether there is the scheduled time, 
+        so we should first drop the information about the date and then check if there is some other information remaining
+        Here it is enough to determine if there is a scheduled hour, not what that hour is!
+    """  
+    # remove "NOT_SELECTED" and similar words from the string:
+    text = re.sub(r'\bNOT_SELECTED\b', '', str(text))
+    text = re.sub(r'\bSELECTED\b', '', str(text))
+
+    list = text.strip().split(" ")
+    keywords = ["NA", "N/A", "N A", "levantamento", "MARCA", "CADA", "utente"]
+    if any(keyword in text for keyword in keywords):
+        return ""
+    if len(list) == 1:
+        return ""
+    if len(list) == 2:
+        if len(list[0]) > 3:
+            return list[1]
+        else: 
+            return "" ## ??? check
+    if len(list[0]) > 5:
+        return "".join([str(item) for item in list[1:]])
+    if len(list[0]) <= 5:
+        if len(list[0]) + len(list[1]) > 5:
+            return "".join([str(item) for item in list[2:]])
+        if (len(list[0]) + len(list[1]) == 5) and (len(list) == 3):
+            return "".join([str(item) for item in list[2:]])
+        elif ((len(list[0]) + len(list[1]) + len(list[2])) > 5) and (len(list) > 3):
+            return "".join([str(item) for item in list[3:]])
+        elif (len(list) > 4) and ((len(list[0]) + len(list[1]) + len(list[2]) + len(list[3])) > 5):
+            return "".join([str(item) for item in list[4:]])        
+        else:
+            return ""
+
+def misread_years_next(text):
+    """
+        Sometimes clean_next() misreads part of the date as a time. This function deals with this mistakes
+    """      
+    if str(text)  in ["22", "2012", "2020", "2021", "2022", "2023", "2027", "2082"]:
+        return ""
+    else:
+        return text
+
 import numpy as np
 import pandas as pd
 def clean_time_with_h(time):

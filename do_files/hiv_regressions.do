@@ -169,7 +169,7 @@ save "${DATA}cleaned_data/hiv_endline.dta", replace
 
 
 ************************************************************************************
-*** 2. Endline
+*** 2. Endline regressions
 ************************************************************************************
 
 global controls score_basic_amenities score_basic_equipment index_general_service index_hiv_care_readiness index_hiv_counseling_readiness urban hospital volume_base_total
@@ -235,6 +235,24 @@ merge m:1 facility_cod using `facility_characteristics', keep(match) nogen
 gen_controls
 label_vars_hiv
 
+sum opening_time, d
+/*
+                        opening_time
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%           -8           -196
+ 5%           17           -178
+10%           60           -115       Obs                 926
+25%          120            -61       Sum of wgt.         926
+
+50%          188                      Mean           184.4611
+                        Largest       Std. dev.      95.22223
+75%          250            420
+90%          305            435       Variance       9067.274
+95%          340            435       Skewness      -.1505885
+99%          393            445       Kurtosis       2.989339
+*/
+
 global outcome_var opening_time
 hiv_group_reg $outcome_var , suffix("hiv")
 
@@ -287,7 +305,7 @@ global controls_vol score_basic_amenities score_basic_equipment index_general_se
 foreach var in npickups n_nid {
     global outcome `var'
     preserve
-        global outcome npickups
+        global outcome `var'
         eststo clear
         estimates clear
 

@@ -44,47 +44,51 @@ end
 // ADD IV REGRESSIONS
 capture program drop mozart_reg
 program mozart_reg
-	syntax varlist(max=1) [if] [ , filename(string) controls(namelist) ]
+	syntax varlist(max=1) [if] [ , absorb(namelist) filename(string) controls(namelist) ]
 	preserve
 	if `"`if'"' != "" {
 		keep `if'
 	}
 
+	tokenize `varlist'
 	global outcome `1'
-	local controls `namelist'
+	di "`outcome'" 
+	di "`absorb'"
+	local controls "`namelist'"
+	global fixed_effects "`absorb'"
 
 	eststo clear
 	estimates clear
 
-	reghdfe $outcome treatment, a( period province) cluster(facility_cod)
+	reghdfe $outcome treatment, absorb($fixed_effects) cluster(facility_cod)
 	qui sum `e(depvar)' if e(sample)
 	qui estadd scalar control_mean= r(mean)
 	qui estadd scalar control_std= r(sd)
-	*add_scalars_hiv
+	add_scalars_hiv
 	qui estimates store model1, title("OLS")
 
-	reghdfe $outcome treatment $controls, a( period province)  cluster(facility_cod)
+	reghdfe $outcome treatment $controls, absorb($fixed_effects)  cluster(facility_cod)
 	add_scalars_hiv
 	qui estimates store model2, title("OLS")
 
 
 	rename treatment treatment_iv
 	rename complier treatment
-	qui ivreghdfe $outcome (treatment=treatment_iv), absorb(period province) cluster(facility_cod)
+	qui ivreghdfe $outcome (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
 	qui estimates store model3, title("IV")
 
-	qui ivreghdfe $outcome $controls (treatment=treatment_iv), absorb(period province) cluster(facility_cod)
+	qui ivreghdfe $outcome $controls (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
 	qui estimates store model4, title("IV")
 
 	drop treatment
 	rename complier10 treatment
-	qui ivreghdfe $outcome (treatment=treatment_iv), absorb(period province) cluster(facility_cod)
+	qui ivreghdfe $outcome (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
 	qui estimates store model5, title("IV ( \geq 10am) ")
 
-	qui ivreghdfe $outcome $controls (treatment=treatment_iv), absorb(period province) cluster(facility_cod)
+	qui ivreghdfe $outcome $controls (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
 	qui estimates store model6, title("IV ( \geq 10am) ")
 
@@ -169,3 +173,69 @@ program mozart_reg_patient_data
 
 	restore
 end
+
+
+capture program drop mozart_reg_het
+program mozart_reg_het
+	syntax varlist( max=1) [if] [, absorb(varlist) filename(string) controls(namelist) het_var(namelist) ]
+	preserve
+	if `"`if'"' != "" {
+		keep `if'
+	}
+
+	tokenize `varlist'
+	global outcome `1'
+	di "`outcome'" 
+	di "`absorb'"
+	global fixed_effects "`absorb'"
+	global controls_reg `controls'
+
+	eststo clear
+	estimates clear
+
+	qui reghdfe $outcome c.treatment##c.`het_var', a($fixed_effects) vce(cl facility_cod)
+	qui sum `e(depvar)' if e(sample)
+	qui estadd scalar control_mean= r(mean)
+	qui estadd scalar control_std= r(sd)
+	add_scalars_hiv
+	qui estimates store model1, title("OLS")
+
+	qui reghdfe $outcome c.treatment##c.`het_var' $controls_reg, a($fixed_effects) vce(cl facility_cod)
+	add_scalars_hiv
+	qui estimates store model2, title("OLS")
+	
+	rename treatment treatment_iv
+	rename complier treatment
+	
+	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var'), absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model3, title("IV")
+
+	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var') $controls_reg, absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model4, title("IV")
+	
+	drop treatment
+	rename complier10 treatment
+	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var'), absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model5, title("IV ( \geq 10am) ")
+
+	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var') $controls_reg, absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model6, title("IV ( \geq 10am) ")
+	
+	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
+	//return list
+
+	esttab  *, stats(control_mean control_std iv_stat  n_compliers  r2 N, label( "Control Mean" "Control SD" "KP Wald F stat" "Compliers"  "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace interaction(" X ") label
+	
+	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
+	
+	esttab * using "`filename'", style(tex) stats(control_mean control_std iv_stat n_compliers  r2 N, label( "Control Mean" "Control SD" "KP Wald F stat" "Compliers" "R2" "N" )) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_reg" `r(indicate_fe)') drop(_cons) se  mlabels(,titles) replace interaction(" X ") label
+	estfe . model*, restore
+
+	restore
+end
+
+

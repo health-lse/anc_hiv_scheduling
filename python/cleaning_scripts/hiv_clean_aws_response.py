@@ -21,6 +21,7 @@ from hiv_clean_utils import *
 import pandas as pd
 import numpy as np
 import json
+import re
 
 # package to read aws json files
 from trp import Document
@@ -56,18 +57,27 @@ def append_line_dict_response(dict_response, file, facility, day, page, line,
         dict_response["col_7"].append(row.cells[7].text)
         dict_response["col_8"].append(row.cells[8].text)
         dict_response["col_9"].append(row.cells[9].text) 
-
+        try:  # file endline_US53_day2_page9 has a different format and has less columns, resulting in an error
+            dict_response["col_10"].append(row.cells[10].text) 
+        except:
+            dict_response["col_10"].append("")
+            
     else:
         try:
             dict_response["col_5"].append(row.cells[5].text)  # if col0 and 1 are empty, scheduled time will be in col5 so we need the data
         except:
             dict_response["col_5"].append("")
+        try:
+            dict_response["col_6"].append(row.cells[6].text)  # if col0 and 1 are empty, next scheduled time will be in col6 so we need the data
+        except:
+            dict_response["col_6"].append("")
 
  #       dict_response["col_5"].append("") 
-        dict_response["col_6"].append("")
+#        dict_response["col_6"].append("")
         dict_response["col_7"].append("")
         dict_response["col_8"].append("")
         dict_response["col_9"].append("") 
+        dict_response["col_10"].append("") 
 
 
 def process_tables():
@@ -86,7 +96,7 @@ def process_tables():
                      "col_0":[], "col_1":[], "col_2":[],
                      "col_3":[], "col_4":[], "col_5":[],
                      "col_6":[], "col_7":[], "col_8":[],
-                     "col_9":[], "two_tables":[]}  
+                     "col_9":[], "col_10":[], "two_tables":[]}  
 
     list_no_tables = []
     list_first_half = []
@@ -157,16 +167,17 @@ def flag_empty_lines(hiv_end_df):
     df_1_table["col_7"] = df_1_table["col_7"].str.replace(":", "").replace(" ", "")
     df_1_table["col_8"] = df_1_table["col_8"].str.replace(":", "").replace(" ", "") 
     df_1_table["col_9"] = df_1_table["col_9"].str.replace(":", "").replace(" ", "")
+    df_1_table["col_10"] = df_1_table["col_10"].str.replace(":", "").replace(" ", "")
     index_empty_456 =  df_1_table.eval(" (col_4 == '' & col_5 == '' & col_6 == '') ")
     index_empty_567 =  df_1_table.eval(" (col_5 == '' & col_6 == '' & col_7 == '') ")
     index_empty_678 =  df_1_table.eval(" (col_6 == '' & col_7 == '' & col_8 == '') ")
-    index_empty_9 =  df_1_table.eval(" (col_9 == '') ") 
+    index_empty_910 =  df_1_table.eval(" (col_9 == '') (col_10 == '') ") 
 
     df_1_table.loc[:,"empty"] = 0
     df_1_table.loc[index_empty_456, "empty"] = 1
     df_1_table.loc[index_empty_567, "empty"] = 1
     df_1_table.loc[index_empty_678, "empty"] = 1
-    df_1_table.loc[index_empty_9, "empty"] = 1
+    df_1_table.loc[index_empty_910, "empty"] = 1
 
     # 2 TABLES
     df_2_tables = hiv_end_df.query("two_tables == 1")
@@ -176,17 +187,18 @@ def flag_empty_lines(hiv_end_df):
     df_2_tables["col_3"] = df_2_tables["col_3"].str.replace(":", "").replace(" ", "")
     df_2_tables["col_4"] = df_2_tables["col_4"].str.replace(":", "").replace(" ", "") 
     df_2_tables["col_5"] = df_2_tables["col_5"].str.replace(":", "").replace(" ", "")
+    df_2_tables["col_6"] = df_2_tables["col_6"].str.replace(":", "").replace(" ", "")
 
     index_empty_012 =  df_2_tables.eval(" (col_0 == '' & col_1 == '' & col_2 == '') ")
     index_empty_123 =  df_2_tables.eval(" (col_1 == '' & col_2 == '' & col_3 == '') ")
     index_empty_234 =  df_2_tables.eval(" (col_2 == '' & col_3 == '' & col_4 == '') ")
-    index_empty_5 =  df_2_tables.eval(" (col_5 == '') ") 
+    index_empty_56 =  df_2_tables.eval(" (col_5 == '') (col_6 == '') ") 
 
     df_2_tables.loc[:,"empty"] = 0
     df_2_tables.loc[index_empty_012, "empty"] = 1
     df_2_tables.loc[index_empty_123, "empty"] = 1
     df_2_tables.loc[index_empty_234, "empty"] = 1
-    df_2_tables.loc[index_empty_5, "empty"] = 1
+    df_2_tables.loc[index_empty_56, "empty"] = 1
 
     return df_1_table, df_2_tables
 
@@ -203,6 +215,7 @@ def find_times_df_1_table(response_df):
     response_df["col_7_clean"] = remove_special_characters(response_df["col_7"])
     response_df["col_8_clean"] = remove_special_characters(response_df["col_8"]) 
     response_df["col_9_clean"] = remove_special_characters(response_df["col_9"]) 
+    response_df["col_10_clean"] = remove_special_characters(response_df["col_10"]) 
 
     response_df.loc[(response_df["col_4"] != ""),
                     "arrival_time"] = response_df["col_4_clean"]
@@ -210,6 +223,8 @@ def find_times_df_1_table(response_df):
                     "consultation_time"] = response_df["col_5_clean"]
     response_df.loc[response_df["col_4"] != "",
                     "scheduled_time"] = response_df["col_7_clean"] 
+    response_df.loc[response_df["col_4"] != "",
+                    "next_scheduled_time"] = response_df["col_8"] 
 
     response_df.loc[(response_df["col_4_clean"] == "") &
                     (response_df["col_5_clean"] != ""),
@@ -220,8 +235,10 @@ def find_times_df_1_table(response_df):
     response_df.loc[(response_df["col_4_clean"] == "") &
                     (response_df["col_5_clean"] != ""),
                         "scheduled_time"] = response_df["col_8_clean"] 
+    response_df.loc[(response_df["col_4_clean"] == "") &
+                    (response_df["col_5_clean"] != ""),
+                        "next_scheduled_time"] = response_df["col_9"] 
 
-    # [QUESTION] the following code does not do much: if both col4 and col5 are empty then almost always there is no info on the time. For sure, scheduled_time would end up being column_9 which does not exist. Needs fixing? added col_9, still needs to be fixed in a better way
     response_df.loc[ (response_df["col_4_clean"] == "") & 
                      (response_df["col_5_clean"] == "") & \
                      (response_df["col_6_clean"] != ""), \
@@ -234,7 +251,11 @@ def find_times_df_1_table(response_df):
                      (response_df["col_5_clean"] == "") & \
                      (response_df["col_6_clean"] != ""), \
                              "scheduled_time"] = response_df["col_9_clean"] 
-    
+    response_df.loc[ (response_df["col_4_clean"] == "") & 
+                     (response_df["col_5_clean"] == "") & \
+                     (response_df["col_6_clean"] != ""), \
+                             "next_scheduled_time"] = response_df["col_10"] 
+        
     response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
                      (response_df["col_5_clean"] != ""),
                                             "arrival_time"] = response_df["col_5_clean"]
@@ -244,18 +265,23 @@ def find_times_df_1_table(response_df):
     response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
                      (response_df["col_5_clean"] != ""),
                                         "scheduled_time"] = response_df["col_8_clean"] 
-    
+    response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
+                     (response_df["col_5_clean"] != ""),
+                                        "next_scheduled_time"] = response_df["col_9"] 
+        
     response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
                      (response_df["col_5_clean"] == ""),
                                             "arrival_time"] = response_df["col_6_clean"]
-
     response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
                      (response_df["col_5_clean"] == ""),
                                         "consultation_time"] = response_df["col_7_clean"]
     response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
                      (response_df["col_5_clean"] == ""),
                                         "scheduled_time"] = response_df["col_9_clean"] 
-    
+    response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
+                     (response_df["col_5_clean"] == ""),
+                                        "next_scheduled_time"] = response_df["col_10"] 
+        
     return response_df
 
 # 2 TABLES
@@ -271,10 +297,12 @@ def find_times_df_2_tables(response_df):
     response_df["col_3_clean"] = remove_special_characters(response_df["col_3"])
     response_df["col_4_clean"] = remove_special_characters(response_df["col_4"])  
     response_df["col_5_clean"] = remove_special_characters(response_df["col_5"])
+    response_df["col_6_clean"] = remove_special_characters(response_df["col_6"])
 
     response_df.loc[response_df["col_0_clean"] != "", "arrival_time"] = response_df["col_0_clean"]
-    response_df.loc[response_df["col_0_clean"] != "","consultation_time"] = response_df["col_1_clean"] # modified, it was col_1 instead of col_1_clean
+    response_df.loc[response_df["col_0_clean"] != "","consultation_time"] = response_df["col_1_clean"] 
     response_df.loc[response_df["col_0_clean"] != "","scheduled_time"] = response_df["col_3_clean"] 
+    response_df.loc[response_df["col_0_clean"] != "","next_scheduled_time"] = response_df["col_4_clean"] 
 
     response_df.loc[(response_df["col_0_clean"] == "") &
                     (response_df["col_1_clean"] != ""), "arrival_time"] = response_df["col_1_clean"]
@@ -282,6 +310,8 @@ def find_times_df_2_tables(response_df):
                     (response_df["col_1_clean"] != ""),"consultation_time"] = response_df["col_2_clean"]
     response_df.loc[(response_df["col_0_clean"] == "") &
                     (response_df["col_1_clean"] != ""),"scheduled_time"] = response_df["col_4_clean"] 
+    response_df.loc[(response_df["col_0_clean"] == "") &
+                    (response_df["col_1_clean"] != ""),"next_scheduled_time"] = response_df["col_5"] 
 
     response_df.loc[(response_df["col_0_clean"] == "") & 
                     (response_df["col_1_clean"] == "") & \
@@ -295,6 +325,10 @@ def find_times_df_2_tables(response_df):
                      (response_df["col_1_clean"] == "") & \
                      (response_df["col_2_clean"] != ""), \
                              "scheduled_time"] = response_df["col_5_clean"]
+    response_df.loc[ (response_df["col_0_clean"] == "") & 
+                     (response_df["col_1_clean"] == "") & \
+                     (response_df["col_2_clean"] != ""), \
+                             "next_scheduled_time"] = response_df["col_6"]
     return response_df
 
 
@@ -313,11 +347,17 @@ def flag_incorrect_obs(response_df):
     response_df["consultation_time_cleaned"] = remove_special_characters(
             response_df["consultation_time"]).apply(misread_h)
 
+    ## SCHEDULED_TIME
     # hour range cleans observations where scheduled time takes the form of an hour range (e.g. 8H9H), returning the midpoint
     response_df["scheduled_time_cleaned"] = remove_special_characters(response_df["scheduled_time"]).str.replace("#", "H").str.replace("h", "H")
- #   response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].str.replace("#", "H").apply(misread_h_scheduled)
     response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].apply(misread_h_scheduled)
     response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].apply(hour_range)
+
+    ## NEXT_SCHEDULED_TIME 
+    # note: we care about there being a time, not about the exact time --> it's ok to be rougher with the cleaning
+    response_df["next_scheduled_time_cleaned"] = response_df["next_scheduled_time"].apply(clean_next).apply(misread_years_next)
+    response_df["next_scheduled_time_cleaned"] = response_df["next_scheduled_time_cleaned"].str.replace('[^A-Za-z0-9\s]+', "")
+
 
     response_df.loc[response_df["arrival_time_cleaned"]=="", "flag"] = 1
     response_df.loc[response_df["consultation_time_cleaned"]=="", "flag"] = 1
@@ -454,7 +494,7 @@ def load_hiv_endline(hiv_end_df):
 
     hiv_cleaned_numeric = hiv_cleaned_numeric[["file_name", "facility", "day", "day_of_week", 
                                                "page", "line", "arrival_time","consultation_time", 
-                                               "scheduled_time", "time_arrived_float",
+                                               "scheduled_time", "next_scheduled_time", "time_arrived_float",
                                                "consultation_time_float", "scheduled_time_float", 
                                                "treatment", "waiting_time", "flag", "empty"]]
 

@@ -52,10 +52,21 @@ gen mpr_95 = mpr > 0.95
 
 label_vars_hiv
 
-mozart_reg days_without_med , controls($controls) filename("tables/new_30_days.tex")
-mozart_reg mpr , controls($controls) filename("tables/new_30_mpr.tex")
-mozart_reg mpr_95 , controls($controls) filename("tables/new_30_mpr_95.tex")
-mozart_reg delay_7 , controls($controls) filename("tables/new_30_delay_7.tex")
+
+local names " "days" "mpr" "mpr_95" "delay_7" "
+local i = 1
+foreach var in days_without_med mpr mpr_95 delay_7 {
+    global outcome `var'
+    local q: word `i' of `names'
+    dis `i' " - " "`q'"
+    mozart_reg $outcome, controls($controls) absorb(period province) filename("tables/new_30_`q'.tex")
+
+    * heterogeneity analysis with maputo:
+    mozart_reg_het $outcome, controls($controls) absorb(period) filename("tables/new_30_`q'_maputo.tex") het_var(maputo)
+
+    local ++i
+}
+
 
 
 *** 1.2. Panel with new patients that got any amount of pills ---------------
@@ -69,13 +80,19 @@ gen mpr_95 = mpr > 0.95
 
 label_vars_hiv
 
-mozart_reg days_without_med , controls($controls) filename("tables/new_all_days.tex")
-mozart_reg mpr , controls($controls) filename("tables/new_all_mpr.tex")
-mozart_reg mpr_95 , controls($controls) filename("tables/new_all_mpr_95.tex")
-mozart_reg delay_7 , controls($controls) filename("tables/new_all_delay_7.tex")
+local names " "days" "mpr" "mpr_95" "delay_7" "
+local i = 1
+foreach var in days_without_med mpr mpr_95 delay_7 {
+    global outcome `var'
+    local q: word `i' of `names'
+    dis `i' " - " "`q'"
+    mozart_reg $outcome, controls($controls) absorb(period province) filename("tables/new_all_`q'.tex")
 
+    * heterogeneity analysis with maputo:
+    mozart_reg_het $outcome, controls($controls) absorb(period) filename("tables/new_all_`q'_maputo.tex") het_var(maputo)
 
-
+    local ++i
+}
  
 *** 1.3. 2 MONTHS (?) ---------------
 /* [ISSUE] find panel_2m
@@ -93,7 +110,7 @@ mozart_reg mpr , controls($controls) filename("tables/mpr_2m.tex")
 */
 
 ************************************************************************************
-*** 2. Generate the dataset for the volume analysis
+*** 2. Generate the datasets for the volume analysis
 ************************************************************************************
  
 use "${MOZART}data_merge_pre_stata.dta", clear
@@ -129,21 +146,57 @@ format pickup_month %tm
 gen quarter = quarter(pickup_date)
 gen month = month(pickup_date)
 
+* keep observations from 2018 (in that year there was a major shift in the way the service was provided)
+keep if year(pickup_date) > 2017
+
+* create new trip counter variable as the one already existing seems wrong
+preserve 
+    gen trip = 1
+    collapse trip, by(nid trv_date_pickup_drug)
+    bysort nid (trv_date_pickup_drug): replace trip = _n
+
+    tempfile trips
+    save `trips'
+restore
+merge m:1 nid trv_date_pickup_drug using  `trips', nogen 
+
+*** CHECKS 
 * [ISSUE] sometimes more than one observation with same nid and pickup date 
 bys nid trv_date_pickup_drug: gen dups = _N
-*bro if dups > 1 // should drop one of the two duplicates?
-duplicates drop nid trv_date_pickup_drug dups, force
+/*
+bro if dups > 1 // should drop one of the two duplicates?
+order dups trip, after(trv_date_pickup_drug)
 
-* keep observations from 2020
-keep if year(pickup_date) > 2019
+count if trv_actual_next_pickup=="NA"
+gen temp = trv_actual_next_pickup=="NA"
+bysort nid (trv_date_pickup_drug): gen last_trip = _n == _N
 
-* collapse at the facility - month level
-bys nid pickup_month: gen n_nid = (_n==1)
+cap drop na_check 
+by nid: egen na_check = max(temp) 
+
+bysort nid (trv_date_pickup_drug): gen next_pickup = trv_actual_next_pickup[_n+1] 
+
+order next_pickup, after(trv_date_pickup_drug)
+*/
+
+duplicates drop nid trv_date_pickup_drug, force
+
+* create the metrics needed for the volume analysis and collapse at the facility - month level
+bys nid pickup_month: gen n_nids = (_n==1)
 gen npickups = 1
-collapse (sum) npickups n_nid, by(facility_cod pickup_month quarter month)
+gen new_patients = (trip == 1)
 
-label var npickups  "Total no of pickups in the facility for that month"
-label var n_nid     "Total no of different hiv patients in the facility for that month"
+destring trv_quantity_take, replace force
+gen npills = trv_quantity_taken
+gen avg_npills = trv_quantity_taken
+
+collapse (mean) avg_npills (sum) new_patients npickups n_nids npills, by(facility_cod pickup_month quarter month)
+
+label var npickups       "Total no of pickups in the facility for that month"
+label var n_nid          "Total no of different hiv patients in the facility for that month"
+label var new_patients   "Number of patients that did their first trip in that month"
+label var npills         "Total no of pills distributed by the facility in that month"
+label var avg_npills     "Average no of pills distributed by the facility in that month"
 
 save "${DATA}cleaned_data/hiv_pickups_ym.dta", replace
 
