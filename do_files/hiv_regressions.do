@@ -60,26 +60,27 @@ merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", keepusin
 do do_files/hiv_manual_cleaning
 
 *** 1.1. create the complier definitions based on hiv data  ------------------------
-clean_timevar scheduled_time
+* clean_timevar scheduled_time // not relevant anymore, added the cleaning in python
 
 preserve
     gen scheduled = scheduled_time > 0
-    gen scheduled10 = scheduled_time > 1000 
+    gen scheduled_next = !missing(next_scheduled_time)
 
-    collapse (mean) treatment  scheduled_share=scheduled scheduled10_share=scheduled10, by(facility_cod)
-    gen complier = (treatment*scheduled_share)>=0.2
-*    gen full_complier_hiv = (treatment*scheduled_share) > 0.7
-    gen complier10 = (treatment*scheduled10_share)>=0.2
+    collapse (mean) treatment  scheduled_share=scheduled scheduled_next_share=scheduled_next, by(facility_cod)
+
+    sum scheduled_share, d
+    gen complier = (treatment*scheduled_share)>=0.15
+    sum scheduled_next_share, d
+    gen complier_next = (treatment*scheduled_next_share)>=0.15
 
     label var scheduled_share       "Share of scheduled consultations in the facility"
     label var complier       "This (treated) facility scheduled more than 20% of the hiv consultations"
-*    label var full_complier_hiv      "This (treated) facility scheduled more than 70% of the hiv consultations"
-    label var complier10        "This (treated) facility scheduled after 10am more than 20% of the hiv consultations"
+    label var scheduled_next_share       "Share of scheduled next consultations in the facility"
+    label var complier_next       "This (treated) facility scheduled the next appointment for more than 20% of the hiv consultations"
  
-    sum scheduled_share if treatment==0, d
+    bys treatment: sum scheduled_share, d
 /*  Some control facilities scheduled some consultations. Issue? Especially facility code 61 has a 22% of scheduled visits
- 
-        Share of scheduled consultations in the facility
+        Share of scheduled consultations in the facility, T=0
     -------------------------------------------------------------
         Percentiles      Smallest
     1%            0              0
@@ -87,12 +88,62 @@ preserve
     10%            0              0       Obs                  40
     25%            0              0       Sum of wgt.          40
 
-    50%     .0071608                      Mean           .0294342
-                            Largest       Std. dev.      .0514655
+    50%     .0062315                      Mean           .0293871
+                            Largest       Std. dev.       .051487
     75%     .0287366       .1027668
-    90%     .1022719       .1164021       Variance       .0026487
-    95%     .1552599       .1941177       Skewness       2.337361
-    99%     .2175573       .2175573       Kurtosis       7.977706
+    90%     .1022719       .1164021       Variance       .0026509
+    95%     .1552599       .1941177       Skewness       2.336664
+    99%     .2175573       .2175573       Kurtosis       7.973433
+
+    -> treatment = 1
+
+        Share of scheduled consultations in the facility, T=1
+    -------------------------------------------------------------
+        Percentiles      Smallest
+    1%            0              0
+    5%            0              0
+    10%     .0014451              0       Obs                  40
+    25%     .0083345              0       Sum of wgt.          40
+
+    50%     .1689477                      Mean           .2858481
+                            Largest       Std. dev.      .3227693
+    75%     .5559905       .8381374
+    90%     .8169926       .8462783       Variance         .10418
+    95%     .8665781       .8868778       Skewness       .7053318
+    99%      .938294        .938294       Kurtosis        1.97203
+*/
+
+    bys treatment: sum scheduled_next_share, d
+/*
+                        (mean) scheduled_next, T=0
+    -------------------------------------------------------------
+        Percentiles      Smallest
+    1%            0              0
+    5%            0              0
+    10%            0              0       Obs                  40
+    25%            0              0       Sum of wgt.          40
+
+    50%     .0008929                      Mean           .0233709
+                            Largest       Std. dev.      .0422425
+    75%     .0240704       .0959821
+    90%     .0932253       .0977312       Variance       .0017844
+    95%     .1062427       .1147541       Skewness       2.074862
+    99%     .1829268       .1829268       Kurtosis       6.821589
+
+                        (mean) scheduled_next T=1
+    -------------------------------------------------------------
+        Percentiles      Smallest
+    1%            0              0
+    5%            0              0
+    10%     .0008333              0       Obs                  40
+    25%     .0145524              0       Sum of wgt.          40
+
+    50%     .1166922                      Mean           .2866458
+                            Largest       Std. dev.      .3126513
+    75%     .5689676        .790625
+    90%      .776347       .8009709       Variance       .0977508
+    95%     .8018012       .8026316       Skewness        .630983
+    99%     .9056261       .9056261       Kurtosis       1.774263
 */
 
     save "${DATA}cleaned_data/hiv_complier_facilities.dta", replace
@@ -225,7 +276,7 @@ preserve
     local fac_vars maputo high_quality gaza_inhambane score_basic_amenities ///
         score_basic_equipment urban hospital volume_base_total index_*
     desc `fac_vars' 
-    collapse `fac_vars' treatment complier complier10, by(facility_cod province)
+    collapse `fac_vars' treatment complier complier_next, by(facility_cod province)
 
     tempfile facility_characteristics
     save `facility_characteristics'
@@ -292,62 +343,9 @@ label_vars_hiv
 gen post = inrange(pickup_month, ym(2021,1), ym(2021,12))
 replace post = 1 if inrange(pickup_month, ym(2020,11), ym(2020,12)) & facility_cod > 41
 
-* post 42 onwards
-
-
-* [QUESTION] long time series, should I drop some of the earier years?
-
-
 global controls_vol score_basic_amenities score_basic_equipment index_general_service index_hiv_care_readiness index_hiv_counseling_readiness urban hospital
 
-*hiv_volume_reg npickups, filename("tables/vol_test_hiv.tex") controls($controls_vol ) // the program gives an error
-
-foreach var in npickups n_nid {
-    global outcome `var'
-    preserve
-        global outcome `var'
-        eststo clear
-        estimates clear
-
-        reghdfe $outcome c.treatment##c.post##c.maputo, absorb( month) vce(cl facility_cod)
-        estimates store model1, title("OLS")
-
-        reghdfe $outcome c.treatment##c.post##c.maputo $controls_vol, absorb( month) vce(cl facility_cod)
-        estimates store model2, title("OLS")
-
-        rename treatment treatment_iv
-        rename complier treatment
-        ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post) , absorb(month province) cluster(facility_cod)
-        estimates store model3, title("IV")
-
-        ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post)  $controls_vol , absorb(month province) cluster(facility_cod)
-        estimates store model4, title("IV")
-
-        drop treatment
-        rename complier10 treatment
-        ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post) , absorb(month province) cluster(facility_cod)
-        estimates store model5, title("IV")
-
-        ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post)  $controls_vol , absorb(month province) cluster(facility_cod)
-        estimates store model6, title("IV")
-
-        estfe . model*, labels(province "Province FE" month "Month FE")
-
-        local filename "tables/vol_test_hiv_`var'.tex"
-        esttab model*  using "`filename'", style(tex) stats(r2 N) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls_vol" `r(indicate_fe)') drop(_cons ) se replace mlabels(,titles)
-
-        estfe . model*, restore
-    restore 
-}
-
-
-
-
-reghdfe npickups c.treatment##c.quarter1 c.treatment##c.quarter2 c.treatment##c.quarter3 $controls_vol, a(province) vce(cl facility_cod)
-
-ivreghdfe npickups c.quarter1 c.quarter2 c.quarter3 (complier c.complier##c.quarter1 c.complier##c.quarter2 c.complier##c.quarter3 = treatment c.treatment##c.quarter1 c.treatment##c.quarter2 c.treatment##c.quarter3) $controls_vol if maputo==1, a(month) cluster(facility_cod)
-
-ivreghdfe $outcome c.post (complier10 c.complier10##c.post = treatment c.treatment##c.post)  $controls_vol , absorb(month ) cluster(facility_cod)
+hiv_volume_reg npickups, filename("tables/vol_test_hiv.tex") controls($controls_vol ) 
 
 
 ************************************************************************************
@@ -365,7 +363,7 @@ preserve
     local fac_vars maputo high_quality gaza_inhambane score_basic_amenities ///
         score_basic_equipment urban hospital volume_base_total index_*
     desc `fac_vars' 
-    collapse `fac_vars' treatment complier complier10, by(facility_cod province)
+    collapse `fac_vars' treatment complier complier_next, by(facility_cod province)
 
     tempfile facility_characteristics
     save `facility_characteristics'
@@ -456,5 +454,13 @@ hiv_did_het $outcome , controls($controls_without_quality) absorb($absorb) filen
 
 * Fuzzy 
 encode province, gen(province_id)
+
+* complier
 fuzzydid $outcome treatment post complier, did cluster(facility_cod) 
 fuzzydid $outcome treatment post complier, did cluster(facility_cod) qualitative(facility_cod province_id) 
+
+* complier_next
+fuzzydid $outcome treatment post complier_next, did cluster(facility_cod) 
+fuzzydid $outcome treatment post complier_next, did cluster(facility_cod) qualitative(facility_cod province_id) 
+
+// coefficients are negative (around -130) but never significant. With facility and province FE, the pvalue is 1.

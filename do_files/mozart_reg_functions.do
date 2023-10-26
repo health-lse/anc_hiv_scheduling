@@ -18,7 +18,7 @@ capture program drop label_vars_hiv
 program define label_vars_hiv
 	label var treatment "Treatment"
 	label var complier "Treatment"
-	label var complier10 "Treatment"
+	label var complier_next "Treatment"
 	capture label var high_quality "High Quality"
 	capture label var urban "Urban"
 	capture label var maputo "Maputo"
@@ -83,14 +83,14 @@ program mozart_reg
 	qui estimates store model4, title("IV")
 
 	drop treatment
-	rename complier10 treatment
+	rename complier_next treatment
 	qui ivreghdfe $outcome (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq 10am) ")
+	qui estimates store model5, title("IV ( \geq next) ")
 
 	qui ivreghdfe $outcome $controls (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq 10am) ")
+	qui estimates store model6, title("IV ( \geq next) ")
 
 
 
@@ -216,14 +216,14 @@ program mozart_reg_het
 	qui estimates store model4, title("IV")
 	
 	drop treatment
-	rename complier10 treatment
+	rename complier_next treatment
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var'), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq 10am) ")
+	qui estimates store model5, title("IV ( \geq next) ")
 
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var') $controls_reg, absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq 10am) ")
+	qui estimates store model6, title("IV ( \geq next) ")
 	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	//return list

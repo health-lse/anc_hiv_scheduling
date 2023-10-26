@@ -14,13 +14,13 @@ end
 
 capture program drop label_vars_hiv
 program define label_vars_hiv
-	label var treatment "Treatment"
-	label var complier "Treatment"
-	label var complier10 "Treatment"
-	capture label var high_quality "High Quality"
-	capture label var urban "Urban"
-	capture label var maputo "Maputo"
-	capture label var gaza_inhambane "Gaza/Inhamb."
+	label var treatment 				"Treatment"
+	label var complier 					"Treatment"
+	label var complier_next 			"Treatment"
+	capture label var high_quality 		"High Quality"
+	capture label var urban 			"Urban"
+	capture label var maputo 			"Maputo"
+	capture label var gaza_inhambane 	"Gaza/Inhamb."
 end
 
 /* Add scalar info to the bottom of the tables */
@@ -91,14 +91,14 @@ program hiv_reg
 	qui estimates store model4, title("IV")
 
 	drop treatment
-	rename complier10 treatment
+	rename complier_next treatment
 	qui ivreghdfe $outcome (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq 10am) ")
+	qui estimates store model5, title("IV ( \geq next) ")
 
 	qui ivreghdfe $outcome $controls_reg (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq 10am) ")
+	qui estimates store model6, title("IV ( \geq next) ")
 
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" first_month "First Month FE")
 
@@ -154,14 +154,14 @@ program hiv_did
 	qui estimates store model4, title("DiD - IV")
 
 	drop treatment
-	rename complier10 treatment
+	rename complier_next treatment
 	qui ivreghdfe $outcome (treatment c.treatment#c.post=treatment_iv c.treatment_iv#c.post) post, absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq 10am) ")
+	qui estimates store model5, title("IV ( \geq next) ")
 
 	qui ivreghdfe $outcome $controls_reg (treatment c.treatment#c.post=treatment_iv c.treatment_iv#c.post) post, absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq 10am) ")
+	qui estimates store model6, title("IV ( \geq next) ")
 
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" first_month "First Month FE")
 
@@ -213,14 +213,14 @@ program hiv_reg_het
 	qui estimates store model4, title("IV")
 	
 	drop treatment
-	rename complier10 treatment
+	rename complier_next treatment
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var'), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq 10am) ")
+	qui estimates store model5, title("IV ( \geq next) ")
 
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var') $controls_reg, absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq 10am) ")
+	qui estimates store model6, title("IV ( \geq next) ")
 	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	//return list
@@ -275,14 +275,14 @@ program hiv_did_het
 	qui estimates store model4, title("DiD - IV")
 	
 	drop treatment
-	rename complier10 treatment
+	rename complier_next treatment
 	qui ivreghdfe $outcome c.`het_var' post (treatment c.treatment#c.post c.treatment#c.`het_var' c.treatment#c.post#c.`het_var' = treatment_iv c.treatment_iv#c.post c.treatment_iv#c.`het_var' c.treatment_iv#c.post#c.`het_var'), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("DiD - IV ( \geq 10am) ")
+	qui estimates store model5, title("DiD - IV ( \geq next) ")
 
 	qui ivreghdfe $outcome c.`het_var' post (treatment c.treatment#c.post c.treatment#c.`het_var' c.treatment#c.post#c.`het_var' = treatment_iv c.treatment_iv#c.post c.treatment_iv#c.`het_var' c.treatment_iv#c.post#c.`het_var') $controls_reg, absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("DiD - IV ( \geq 10am) ")
+	qui estimates store model6, title("DiD - IV ( \geq next) ")
 	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	//return list
@@ -337,14 +337,14 @@ program hiv_reg_het_noabsorb
 	qui estimates store model4, title("IV")
 	
 	drop treatment
-	rename complier10 treatment
+	rename complier_next treatment
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var'), cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq 10am) ")
+	qui estimates store model5, title("IV ( \geq next) ")
 
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var') $controls_reg, cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq 10am) ")
+	qui estimates store model6, title("IV ( \geq next) ")
 	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	//return list
@@ -402,6 +402,7 @@ program hiv_volume_reg
 		keep `if'
 	}
 
+	tokenize `varlist'
 	global outcome `1'
 	global fixed_effects `absorb'
 	local controls_reg `namelist'
@@ -424,12 +425,12 @@ program hiv_volume_reg
 	estimates store model4, title("IV")
 
 	drop treatment
-	rename complier10 treatment
+	rename complier_next treatment
 	ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post) , absorb(month province) cluster(facility_cod)
-	estimates store model5, title("IV")
+	estimates store model5, title("IV ( \geq next)")
 	
 	ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post)  $controls_reg , absorb(month province) cluster(facility_cod)
-	estimates store model6, title("IV")
+	estimates store model6, title("IV ( \geq next)")
 	
 /*	ivreghdfe $outcome (complier complier##quarter1 complier##quarter2 complier##quarter3 = treatment treatment##quarter1 treatment##quarter2 treatment##quarter3) $controls, absorb($fixed_effects) cluster(facility_cod)
 	estimates store model4, title("IV")*/

@@ -21,7 +21,6 @@ from hiv_clean_utils import *
 import pandas as pd
 import numpy as np
 import json
-import re
 
 # package to read aws json files
 from trp import Document
@@ -355,9 +354,11 @@ def flag_incorrect_obs(response_df):
 
     ## NEXT_SCHEDULED_TIME 
     # note: we care about there being a time, not about the exact time --> it's ok to be rougher with the cleaning
-    response_df["next_scheduled_time_cleaned"] = response_df["next_scheduled_time"].apply(clean_next).apply(misread_years_next)
+    response_df["next_scheduled_time_cleaned"] = response_df["next_scheduled_time"].apply(clean_next)
     response_df["next_scheduled_time_cleaned"] = response_df["next_scheduled_time_cleaned"].str.replace('[^A-Za-z0-9\s]+', "")
-
+    response_df["next_scheduled_time_cleaned"] = response_df["next_scheduled_time_cleaned"].apply(miscleaned_next)
+    response_df["next_scheduled_time_cleaned"] = remove_nextscheduled(response_df["next_scheduled_time_cleaned"])
+    
 
     response_df.loc[response_df["arrival_time_cleaned"]=="", "flag"] = 1
     response_df.loc[response_df["consultation_time_cleaned"]=="", "flag"] = 1
@@ -486,6 +487,7 @@ def load_hiv_endline(hiv_end_df):
     
     hiv_cleaned_numeric[["time_arrived_float", "consultation_time_float", "scheduled_time_float"]] = hiv_cleaned_numeric[["arrival_time", "consultation_time", "scheduled_time"]].applymap(time_to_time_float)
 
+    hiv_cleaned_numeric["next_scheduled_time"] = hiv_cleaned_numeric["next_scheduled_time_cleaned"] 
 
     hiv_cleaned_numeric["day"] = (hiv_cleaned_numeric["day"].astype(int))
     hiv_cleaned_numeric["page"] = (hiv_cleaned_numeric["page"].astype(int))

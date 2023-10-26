@@ -31,8 +31,8 @@ replace scheduled_time = 0 if file_name=="endline_US13_day2_page6.txt" & line==8
 replace arrival_time = 0 if file_name=="endline_US13_day8_page6.txt" & line==4
 
 ** next_scheduled_time
-replace next_scheduled_time = 800 if file_name=="endline_US14_day7_page5.txt" & line==6
-replace next_scheduled_time = 800 if file_name=="endline_US14_day9_page7.txt" & line==6
+replace next_scheduled_time = "8h" if file_name=="endline_US14_day7_page5.txt" & line==6
+replace next_scheduled_time = "8h" if file_name=="endline_US14_day9_page7.txt" & line==6
 
 
 /*

@@ -117,6 +117,7 @@ def hour_range(text):
     else: 
         return text
     
+import re
 def clean_next(text):
     """
         this script cleans the variable next_scheduled_time: this variable is different from the other time ones as it starts
@@ -139,10 +140,12 @@ def clean_next(text):
             return list[1]
         else: 
             return "" ## ??? check
-    if len(list[0]) > 5:
+    if len(list[0]) >= 5:
         return "".join([str(item) for item in list[1:]])
-    if len(list[0]) <= 5:
-        if len(list[0]) + len(list[1]) > 5:
+    if len(list[0]) < 5:
+        if ((len(list[0]) + len(list[1])) > 5) and (len(list) == 3) and len(list[2]) == 1:
+            return "".join([str(item) for item in list[1:]])
+        elif len(list[0]) + len(list[1]) > 5:
             return "".join([str(item) for item in list[2:]])
         if (len(list[0]) + len(list[1]) == 5) and (len(list) == 3):
             return "".join([str(item) for item in list[2:]])
@@ -153,14 +156,32 @@ def clean_next(text):
         else:
             return ""
 
-def misread_years_next(text):
+
+def miscleaned_next(text):
     """
         Sometimes clean_next() misreads part of the date as a time. This function deals with this mistakes
+        It also deals with other types of cleaning mistakes
     """      
-    if str(text)  in ["22", "2012", "2020", "2021", "2022", "2023", "2027", "2082"]:
+    if str(text)  in ["22", "2002", "2012", "2020", "2021", "2022", "2023", "2027", "2082"]:
+        return ""
+    keywords = ["NA", "NB", "ND", "NK", "NIN","MA", "WA", "W A", "VIA", "VLA", "VA", "UTA", "UA", "ULA", "NTA", "NIA", "PA", "Hora"]
+    if any(keyword in str(text).upper() for keyword in keywords):
         return ""
     else:
         return text
+    
+
+def remove_nextscheduled(column):
+    """
+        removes words related to the Column "next_scheduled_time"
+    """
+    return (column
+             .str.replace("an", "9h")
+             .str.replace("qh", "9h")
+             .str.replace("w", "W")
+             .str.replace("W", "")
+             .str.replace("N", "")             
+             )
 
 import numpy as np
 import pandas as pd
