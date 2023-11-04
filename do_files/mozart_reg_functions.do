@@ -86,11 +86,11 @@ program mozart_reg
 	rename complier_next treatment
 	qui ivreghdfe $outcome (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq next) ")
+	qui estimates store model5, title("IV (next) ")
 
 	qui ivreghdfe $outcome $controls (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq next) ")
+	qui estimates store model6, title("IV (next) ")
 
 
 
@@ -219,11 +219,11 @@ program mozart_reg_het
 	rename complier_next treatment
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var'), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq next) ")
+	qui estimates store model5, title("IV (next) ")
 
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var') $controls_reg, absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq next) ")
+	qui estimates store model6, title("IV (next) ")
 	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	//return list

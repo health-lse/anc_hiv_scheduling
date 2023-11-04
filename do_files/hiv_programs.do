@@ -94,11 +94,11 @@ program hiv_reg
 	rename complier_next treatment
 	qui ivreghdfe $outcome (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq next) ")
+	qui estimates store model5, title("IV (next) ")
 
 	qui ivreghdfe $outcome $controls_reg (treatment=treatment_iv), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq next) ")
+	qui estimates store model6, title("IV (next) ")
 
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" first_month "First Month FE")
 
@@ -157,11 +157,11 @@ program hiv_did
 	rename complier_next treatment
 	qui ivreghdfe $outcome (treatment c.treatment#c.post=treatment_iv c.treatment_iv#c.post) post, absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq next) ")
+	qui estimates store model5, title("IV (next) ")
 
 	qui ivreghdfe $outcome $controls_reg (treatment c.treatment#c.post=treatment_iv c.treatment_iv#c.post) post, absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq next) ")
+	qui estimates store model6, title("IV (next) ")
 
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" first_month "First Month FE")
 
@@ -216,11 +216,11 @@ program hiv_reg_het
 	rename complier_next treatment
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var'), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq next) ")
+	qui estimates store model5, title("IV (next) ")
 
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var') $controls_reg, absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq next) ")
+	qui estimates store model6, title("IV (next) ")
 	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	//return list
@@ -278,11 +278,11 @@ program hiv_did_het
 	rename complier_next treatment
 	qui ivreghdfe $outcome c.`het_var' post (treatment c.treatment#c.post c.treatment#c.`het_var' c.treatment#c.post#c.`het_var' = treatment_iv c.treatment_iv#c.post c.treatment_iv#c.`het_var' c.treatment_iv#c.post#c.`het_var'), absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("DiD - IV ( \geq next) ")
+	qui estimates store model5, title("DiD - IV (next) ")
 
 	qui ivreghdfe $outcome c.`het_var' post (treatment c.treatment#c.post c.treatment#c.`het_var' c.treatment#c.post#c.`het_var' = treatment_iv c.treatment_iv#c.post c.treatment_iv#c.`het_var' c.treatment_iv#c.post#c.`het_var') $controls_reg, absorb($fixed_effects) cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("DiD - IV ( \geq next) ")
+	qui estimates store model6, title("DiD - IV (next) ")
 	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	//return list
@@ -340,11 +340,11 @@ program hiv_reg_het_noabsorb
 	rename complier_next treatment
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var'), cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model5, title("IV ( \geq next) ")
+	qui estimates store model5, title("IV (next) ")
 
 	qui ivreghdfe $outcome c.`het_var' (treatment c.treatment##c.`het_var' = treatment_iv c.treatment_iv##c.`het_var') $controls_reg, cluster(facility_cod)
 	add_scalars_hiv
-	qui estimates store model6, title("IV ( \geq next) ")
+	qui estimates store model6, title("IV (next) ")
 	
 	estfe . model*, labels(province "Province FE" day_of_week "Day of week FE" district "District FE")
 	//return list
@@ -427,10 +427,10 @@ program hiv_volume_reg
 	drop treatment
 	rename complier_next treatment
 	ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post) , absorb(month province) cluster(facility_cod)
-	estimates store model5, title("IV ( \geq next)")
+	estimates store model5, title("IV (next)")
 	
 	ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post)  $controls_reg , absorb(month province) cluster(facility_cod)
-	estimates store model6, title("IV ( \geq next)")
+	estimates store model6, title("IV (next)")
 	
 /*	ivreghdfe $outcome (complier complier##quarter1 complier##quarter2 complier##quarter3 = treatment treatment##quarter1 treatment##quarter2 treatment##quarter3) $controls, absorb($fixed_effects) cluster(facility_cod)
 	estimates store model4, title("IV")*/

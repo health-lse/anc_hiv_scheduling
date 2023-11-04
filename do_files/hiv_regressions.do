@@ -74,9 +74,9 @@ preserve
     gen complier_next = (treatment*scheduled_next_share)>=0.15
 
     label var scheduled_share       "Share of scheduled consultations in the facility"
-    label var complier       "This (treated) facility scheduled more than 20% of the hiv consultations"
+    label var complier       "This (treated) facility scheduled more than 15% of the hiv consultations"
     label var scheduled_next_share       "Share of scheduled next consultations in the facility"
-    label var complier_next       "This (treated) facility scheduled the next appointment for more than 20% of the hiv consultations"
+    label var complier_next       "This (treated) facility scheduled the next appointment for more than 15% of the hiv consultations"
  
     bys treatment: sum scheduled_share, d
 /*  Some control facilities scheduled some consultations. Issue? Especially facility code 61 has a 22% of scheduled visits
