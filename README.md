@@ -9,6 +9,10 @@ Run anc_graphs.py to generate ANC graphs
 
 Run anc_regressions.do to generate the ANC tables
 
+Run hiv_panel.py to generate the mozart panels
+
+Run hiv_graphs.py to generate the mozart graphs
+
 # Mozart data:
 Mozart contains data of the HIV patient pickups. One issue with this data is that some patients get their medication every month, others every 3 months. Usually patients starts in the 1 month regime and then at some point change to the 3 month regime. In order to make these groups comparable, we selected 
 
