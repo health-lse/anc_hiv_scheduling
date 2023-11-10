@@ -114,7 +114,6 @@ mozart_reg mpr , controls($controls) filename("tables/mpr_2m.tex")
 *** 2. Generate the datasets for the volume analysis 
 ************************************************************************************
  
-
  * ----------- NEW ATTEMPT --------------- *
 use "${MOZART}data_merge_pre_stata.dta", clear
 
@@ -123,7 +122,7 @@ preserve
 
     * facility_name has spaces in using but not in master data
     replace facility_name = subinstr(facility_name," ","",.)
-    keep facility*
+    keep facility* maputo
     tempfile facility_characteristics
     save `facility_characteristics'
 restore
@@ -170,7 +169,7 @@ bys nid trv_date_pickup_drug: gen dups = _N
 duplicates drop nid trv_date_pickup_drug, force
 
 destring trv_quantity_taken, replace force // 8488 "NA" observations replaced as .
-// [ISSUE] quantity taken needs to be cleaned 
+// [ISSUE] quantity taken needs to be cleaned  // rafael dropped observations with more than 360 pills
 /*
                         trv_quantity_taken
     -------------------------------------------------------------
@@ -190,6 +189,7 @@ destring trv_quantity_taken, replace force // 8488 "NA" observations replaced as
 
 * for now I winsorize at 95%: !!!strong assumption, maybe it is just better to drop those observations/patients?
 replace trv_quantity_taken = 90 if trv_quantity_taken > 90
+keep nid pickup* trv_quantity_taken trip facility* maputo
 
 * create the patient-month panel:
 bys nid (trip): gen day_pickup1 = pickup_date[1]
@@ -198,7 +198,11 @@ bys nid (trip): gen month_pickup1 = pickup_month[1]
 format day_pickup1 %td
 format month_pickup1 %tm
 
-* create a monthly dataset for each nid, to fill in months without pickups
+*bys nid pickup_month: egen npills_pickedup_m = total(trv_quantity_taken)
+bys nid pickup_month: gen pickups_per_m = _N
+by nid pickup_month: gen pickcount = _n 
+
+* create a monthly observation for each nid, to fill in months without pickups
 preserve 
     keep nid day_pickup1 pickup_month 
     duplicates drop nid day_pickup1, force 
@@ -231,14 +235,12 @@ replace pickup_date = dofm(pickup_month) if _m==2
 gen nopickup=_m==2
 drop _m
 
+* replace missing values of trv_quantity_taken
+replace trv_quantity_taken = 0 if missing(trv_quantity_taken)
 
-*bys nid pickup_month: egen npills_pickedup_m = total(trv_quantity_taken)
-bys nid pickup_month: gen pickups_per_m = _N
-by nid pickup_month: gen pickcount = _n
-
-
-bys nid (pickup_date): gen expiry = pickup_date + trv_quantity_taken - 1
-by nid: replace expiry = expiry[_n-1] + trv_quantity_taken - 1 if expiry[_n-1] > pickup_date & trip>1
+bys nid (pickup_date): gen expiry = pickup_date + trv_quantity_taken - 1 if trv_quantity_taken > 0
+by nid: replace expiry = expiry[_n-1] if nopickup 
+by nid: replace expiry = expiry[_n-1] + trv_quantity_taken - 1 if expiry[_n-1] > pickup_date & trip>1 & nopickup==0
 format expiry %td
 
 by nid: gen last_expiry = expiry[_n-1] if _n>1 
@@ -255,26 +257,54 @@ bys nid pickup_month (pickup_date): egen days_without_med = total(days_without)
 
 * count the number of days without pills after the pickup and until the end of the month
 by nid pickup_month: replace days_without_med = days_without_med + max(0,(lastdayofmonth(pickup_date)-expiry[_N])) if _n==_N
+by nid pickup_month: replace days_without_med = min(days_without_med, daysinmonth(pickup_date)) // cap days_without_med at the no. of days in the month
 
-by nid pickup_month: gen mpr= 1-(days_without_total/daysinmonth(pickup_date))
+by nid pickup_month: gen mpr= 1-(days_without_med/daysinmonth(pickup_date))
+
 
 * create the post intervention variable
-gen post = inrange(pickup_month, ym(2021,1), ym(2021,12))
-replace post = 1 if inrange(pickup_month, ym(2020,11), ym(2020,12)) & facility_cod > 41
+gen post = (pickup_date>=mdy(10,26,2020) & maputo)
+replace post = 1 if pickup_date>=mdy(12,07,2020) & !maputo
 
 * label patients that had their first pickup after the intervention
 bys nid (pickup_month): gen new_patient = (post[1])
 
-* label patients that picked up 30 pills in all their pickups
+* label patients that picked up 30 pills in all of their pickups
 gen pick30 = trv_quantity_taken==30
 
-collapse (mean) pick30 (sum) npills_pickedup_m=trv_quantity_taken (last) new_patient month_pickup1 day_pickup1 mpr days_without_med, by(nid pickup_month facility_cod facility_name)
+* make sure the facility code is never missing
+bys nid: replace facility_cod = facility_cod[1]
+bys nid: replace facility_name = facility_name[1]
+bys nid: replace maputo = maputo[1]
+
+collapse (mean) pick30 maputo (sum) npills_pickedup_m=trv_quantity_taken (last) new_patient month_pickup1 day_pickup1 mpr days_without_med, by(nid pickup_month facility_cod facility_name)
+
+* label first 5 months after the intervention
+gen post = (pickup_month>=ym(2020,10) & maputo)
+replace post = 1 if pickup_month>=ym(2020,12) & !maputo
+
+bys nid post (pickup_month): gen pick_5months = _n<=6 
+replace pick_5months = 0 if !post
+
+//////////////
+* fix pick30 variable
+
+///////////////
 
 label var pick30                    "Share of pickups with 30 pills"
 label var npills_pickedup_m         "NUmber of pills picked per month"
 label var new_patient               "Patient that had the first pickup after the intervention"
 label var days_without_med          "Number of days without pills in a month"
+label var pick_5months              "Within 5 months from the intervention"
 
+* 2.1. Create the new version of the panels:
+preserve 
+    keep if new_patient & pick_5months
+    save "${DATA}cleaned_data/panel_new_all_updated", replace
+
+    keep if pick30
+    save "${DATA}cleaned_data/panel_new_30_updated", replace
+restore 
 
 save "${DATA}cleaned_data/panel_monthly.dta", replace
 
@@ -282,7 +312,6 @@ save "${DATA}cleaned_data/panel_monthly.dta", replace
 *** 2.1. 
 use "${DATA}cleaned_data/panel_monthly.dta", clear 
 
-gen new_patient2 = month_pickup1>ym(2020,10)
 
 collapse mpr days_without_med new_patient2, by(facility_cod pickup_month)
 
