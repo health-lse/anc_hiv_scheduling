@@ -5,6 +5,7 @@ capture program drop gen_controls
 program gen_controls
 	gen woman = (pac_sex=="F")
 	rename pac_age age
+	capture destring age, replace
 	global controls_patient woman age 
 
 	global controls_facility index_hiv_care_readiness art_different_lines art_general hand_wash dayaverage urban cd4 score_basic_amenities score_basic_equipment hiv_diagnostic_capacity index_general_service
