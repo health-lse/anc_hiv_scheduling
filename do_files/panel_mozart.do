@@ -40,7 +40,6 @@ do do_files/mozart_reg_functions
  
 *** 1.1. Panel with patients that got 30 pills in all their pickups ---------------
 use "${MOZART}panel_new_30.dta", clear
-
 use "${DATA}cleaned_data/panel_new_30_updated.dta", clear
 
 merge m:1 facility_cod using "${DATA}cleaned_data/hiv_complier_facilities.dta", nogen 
@@ -80,7 +79,6 @@ merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", nogen
 
 gen_controls
 gen mpr_95 = mpr > 0.95
-gen delay_7 = days_without_med >= 7
 
 label_vars_hiv
 
@@ -97,21 +95,6 @@ foreach var in days_without_med mpr mpr_95 delay_7 {
 
     local ++i
 }
- 
-*** 1.3. 2 MONTHS (?) ---------------
-/* [ISSUE] find panel_2m
-use "${MOZART}panel_2m.dta", clear
-
-merge m:1 facility_cod using "${DATA}cleaned_data/hiv_complier_facilities.dta", nogen 
-merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", nogen 
-
-gen_controls
-
-global controls $controls baseline_pickups_per_month
-
-mozart_reg days_without_med , controls($controls) filename("tables/days_without_2m.tex")
-mozart_reg mpr , controls($controls) filename("tables/mpr_2m.tex")
-*/
 
 
 ************************************************************************************
@@ -158,8 +141,8 @@ gen month = month(pickup_date)
 keep if year(pickup_date) > 2017
 
 * drop observations referring to the same pickup 
-bys nid trv_date_pickup_drug: gen dups = _N
-duplicates drop nid trv_date_pickup_drug, force
+bys nid pickup_date (trv_quantity_taken): gen dups = _N>1 // label the duplicate pickups
+duplicates drop nid pickup_date, force
 
 destring trv_quantity_taken, replace force // 8488 "NA" observations replaced as .
 // [ISSUE] quantity taken needs to be cleaned  // rafael dropped observations with more than 360 pills
@@ -182,7 +165,7 @@ destring trv_quantity_taken, replace force // 8488 "NA" observations replaced as
 
 * for now I winsorize at 95%: !!!strong assumption, maybe it is just better to drop those observations/patients?
 replace trv_quantity_taken = 90 if trv_quantity_taken > 90
-keep nid pickup* trv_quantity_taken facility* maputo trv_date_pickup_drug pac_sex pac_age
+keep nid pickup* trv_quantity_taken facility* maputo trv_date_pickup_drug pac_sex pac_age dups
 
 * drop pickups with trv_quantity_taken>=0
 drop if trv_quantity_taken<=0
@@ -268,23 +251,30 @@ by nid pickup_month: replace days_without_med = min(days_without_med, daysinmont
 
 by nid pickup_month: gen mpr= 1-(days_without_med/daysinmonth(pickup_date))
 
-gen intervention_date =  mdy(10,26,2020) if maputo
-replace intervention_date = mdy(12,07,2020) if !maputo
-
-* create the post intervention variable
-gen post = pickup_date>= intervention_date
-
-* label patients that had their first pickup after the intervention
-bys nid (pickup_month): gen new_patient = (post[1])
-
 * make sure the facility code is never missing
 sort nid pickup_date
 foreach var in facility_cod facility_name maputo month_pickup1 day_pickup1 pac_sex pac_age {
     by nid: replace `var' = `var'[1]
 }
 
+replace dups = 0 if missing(dups)
+
+gen intervention_date =  mdy(10,26,2020) if maputo
+replace intervention_date = mdy(12,07,2020) if !maputo
+format intervention_date  %td
+
+* create the post intervention variable
+gen post = pickup_date>= intervention_date
+
+* label patients that had their first pickup after the intervention
+bys nid (pickup_date): gen new_patient = (post[1])
+
 *keep only the year before and after the intervention
 gen months_from_intervention = pickup_month - mofd(intervention_date)
+
+* label patients for the old_panel
+bys nid (pickup_date): gen old_patient = months_from_intervention[1]>=-12 & !new_patient
+
 keep if inrange(months_from_intervention,-12,12)
 
 * label the 5 months after the intervention
@@ -297,31 +287,61 @@ bys nid pick_5months: egen temp3 = min(temp2)
 bys nid: egen pick30_5months = max(temp3)
 drop temp*
 
-collapse pac_age (sum) npills_pickedup_m=trv_quantity_taken (last) new_patient month_pickup1 months_from_intervention ///
+destring pac_age, replace
+
+collapse pac_age (sum) npills_pickedup_m=trv_quantity_taken (last) old_patient new_patient month_pickup1 months_from_intervention ///
     pick30_5months pick_5months maputo day_pickup1 mpr days_without_med intervention_date pac_sex, ///
     by(nid pickup_month facility_cod facility_name)
 
 label var npills_pickedup_m         "NUmber of pills picked per month"
 label var new_patient               "Patient that had the first pickup after the intervention"
+label var old_patient               "Patient that had the first pickup in the 12 months before the intervention"
 label var days_without_med          "Number of days without pills in a month"
 label var pick_5months              "Within 5 months from the intervention"
 label var pick30_5months            "30 pills in all the pickups in the 5 months after the intervention "
 
+merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", keepusing(treat) nogen 
+gen treatment_status = cond(treatment==0,"control", "treatment") 
+
 * 2.1. Create the new version of the panels:
 preserve 
     keep if new_patient & pick_5months
-    drop if months_from_intervention==0
-    bys nid: gen full = _N==5
-    keep if full // should I? alternatively we could drop if pickup_month==month_pickup1 
+
+    *drop if months_from_intervention==0
+    *bys nid: gen full = _N==5
+    *keep if full // should I? alternatively we could drop if pickup_month==month_pickup1 
     * note: Rafael kept also nids that had the first pickup some months after the intervention. 
     *   By keeping only new_patients and a balanced panel, I am restricting to patients starting in month 0 
+    drop if pickup_month==month_pickup1 
+    rename months_from_intervention period
+    gen delay_7 = days_without_med >= 7
+
     save "${DATA}cleaned_data/panel_new_all_updated", replace
 
+    drop delay_7
     keep if pick30
     save "${DATA}cleaned_data/panel_new_30_updated", replace
 restore 
 
 save "${DATA}cleaned_data/panel_monthly.dta", replace
+
+** old_panel: // this should be aggregate at the three months period:
+keep if old_patient
+keep if inrange(months_from_intervention,-12,10)
+drop if pickup_month==month_pickup1 
+
+gen intervention_month=mofd(intervention_date)
+gen period = floor(months_from_intervention/3)
+
+gen ndays_month = daysinmonth(pickup_month)
+bys nid period: egen ndays = total(ndays)
+by nid period: egen days_without_med_period = total(days_without_med)
+gen mpr_period = 1 - (days_without_med_period/ndays)
+
+global controls pac_sex pac_age facility_cod facility_name maputo day_pickup1 month_pickup1 pickup_month intervention_date treat*
+collapse mpr=mpr_period days_without_med=days_without_med_period ndays (first) $controls, by(nid period)
+
+save "${DATA}cleaned_data/panel_old_updated", replace
 
 
 *** 2.1. 

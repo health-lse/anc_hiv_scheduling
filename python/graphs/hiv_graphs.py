@@ -380,7 +380,7 @@ def old_patients_loss_to_followup(adm, palette_anc, order,
     old_last["last_pickup"] = 0
     old_last.loc[old_last["remaining_pickups"] == 1, "last_pickup"] = 1
 
-    sns.barplot(old_last.query("month_order.between(-10,10)"),
+    sns.barplot(old_last.query("(-10 <= month_order <= 10)"),
                 x="month_order", y="last_pickup",
                 hue="treatment")
     plt.title("Old patients: loss to follow up")
@@ -665,7 +665,7 @@ def heterogeneity_graphs(path_aux, adm, panel_new_all, img_path):
 
     #### VOLUME
     facility_info["pat_per_day"] = (adm
-                                    .query("month_order.between(-3,1, inclusive='both')")
+                                    .query("(-3 <= month_order <= 1)")
                                     .groupby("facility_cod")
                                     .size()
                                     .div(90)
@@ -740,17 +740,21 @@ def plot_het_graph(df,x,y,labels):
     return g
 
 def __init__():
-    data_path = "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling"
+    data_path = "/Users/vincenzoalfano/LSE - Health/anc_hiv_scheduling"
     mozart_path = f"{data_path}/data/cleaned_data/mozart"
+    updated_data = f"{data_path}/data/cleaned_data"
     path_aux = f"{data_path}/data/aux"
     img_path = f"{data_path}/graphs/mozart"
     print("cleaning data_merge_pre_stata : mozart data")
     adm = get_data_merge_pre_stata_filtered(mozart_path, path_aux)
     
-    panel_old = pd.read_stata(f"{mozart_path}/panel_old.dta")
+    #panel_old = pd.read_stata(f"{mozart_path}/panel_old.dta")
+    #panel_new_all = pd.read_stata(f"{mozart_path}/panel_new_all.dta")
+    #panel_new_30 = pd.read_stata(f"{mozart_path}/panel_new_30.dta")
 
-    panel_new_all = pd.read_stata(f"{mozart_path}/panel_new_all.dta")
-    panel_new_30 = pd.read_stata(f"{mozart_path}/panel_new_30.dta")
+    panel_old = pd.read_stata(f"{updated_data}/panel_old_updated.dta")
+    panel_new_all = pd.read_stata(f"{updated_data}/panel_new_all_updated.dta")
+    panel_new_30 = pd.read_stata(f"{updated_data}/panel_new_30_updated.dta")
 
     for df in [panel_new_30, panel_new_all, panel_old, adm]:# panel_old
         df["treatment_status"] = "treatment"
