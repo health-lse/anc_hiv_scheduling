@@ -40,9 +40,10 @@ def load_anc_df(anc_full_path):
 
 
 def load_registry_book(reg_book_full_path, tc_df):
-    reg_book = pd.read_csv(reg_book_full_path)
-    reg_book = reg_book[reg_book["facility_cod"].str.len()<=2]
-    reg_book = reg_book[reg_book["anc_total"].str.len()<=2]
+#    reg_book = pd.read_csv(reg_book_full_path)
+    reg_book = pd.read_stata(reg_book_full_path)
+    reg_book = reg_book[reg_book["facility_cod"].astype(str).str.len()<=2]
+    reg_book = reg_book[reg_book["anc_total"].astype(str).str.len()<=2]
     reg_book["anc_total"] = reg_book["anc_total"].astype(int)
     reg_book = reg_book[reg_book["anc_total"] <= 40]
 
@@ -92,19 +93,19 @@ def patient_volume():
 
 
 def get_open_hours(df, arrival_time_col_name):
-    open_h = (df.groupby(["facility", "day"])
+    open_h = (df.groupby(["facility_cod", "day"])
     .agg({arrival_time_col_name:["min", "max"],
-        "facility":"first",
-        "day":"first",
-        "treatment_status":"first"})
+        "facility_cod":"min",
+        "day":"min",
+        "treatment_status":"min"})
     .reset_index())
 
     open_h["open"] = open_h[arrival_time_col_name]["min"]
     open_h["close"] = open_h[arrival_time_col_name]["max"]
-    open_h["facility"] = open_h["facility"]
+    open_h["facility_cod"] = open_h["facility_cod"]
     open_h["day"] = open_h["day"]
 
-    open_h = open_h[["facility", "day", "open", "close", "treatment_status"]]
+    open_h = open_h[["facility_cod", "day", "open", "close", "treatment_status"]]
     open_h = open_h.droplevel(1, axis=1)
 
     open_h = open_h.loc[:,~open_h.columns.duplicated()].copy()
@@ -126,12 +127,17 @@ def anc_hiv_opening_hours(anc):
     title = "ANC: Average opening hours"
 
     open_h_anc["openting_time_hours"] = open_h_anc["opening_time"]/60
+    pct_change = ((open_h_anc[open_h_anc["treatment_status"] == "treated"]["openting_time_hours"].mean() -
+                      open_h_anc[open_h_anc["treatment_status"] == "control"]["openting_time_hours"].mean()) /
+                     open_h_anc[open_h_anc["treatment_status"] == "control"]["openting_time_hours"].mean()) * 100
+
     sns.barplot(open_h_anc,
                 x="treatment_status", y="openting_time_hours",
                 palette=palette_anc, errwidth=0.5, capsize=0.1,
                 order=order, errorbar=("se", 1.96))
-    plt.title("ANC", fontsize=10)
-    plt.xlabel(SOURCE_WT_FORMS + "\n n=77 facilities, 12 days each", size=6)
+    plt.title("Horario de Funcionamento T v C", fontsize=10)
+    PCT_CHANGE = "Aumento de horário de funcionamento de "
+    plt.xlabel(PCT_CHANGE + str(round(pct_change)) + "% \n" + SOURCE_WT_FORMS + "\n n=77 facilities, 12 days each", size=8)
     plt.ylabel("")
     plt.ylim([0,4.3])
     plt.yticks(range(0,5), fontsize=8)
@@ -162,29 +168,36 @@ def avg_consultations_per_patient(reg_book):
 
 
 def waiting_time_by_consultation_reason(anc):
+
+    # wt_t0 = anc.query("consultation_reason == 1 & treatment_status==0")[["waiting_time"]].mean()
+    # wt_t1 = anc.query("consultation_reason == 1 & treatment_status==1")["waiting_time"].mean()
+
     plt.figure(figsize=(6, 3))
     plt.subplot(1, 2, 1)
     sns.barplot(anc.query("consultation_reason == 1"), 
                 x="treatment_status", y="waiting_time",
                 palette=palette_anc, errwidth=0.5, capsize=0.1,
                 hue_order=order, errorbar=("se", 1.96))
-    plt.title("ANC: 1st visits")
-    plt.xlabel(SOURCE_WT_FORMS + "\n"+ size_1st(anc) , fontsize=6)
+    # plt.title("ANC: 1st visits")
+    #plt.xlabel(SOURCE_WT_FORMS + "\n"+ size_1st(anc) , fontsize=6)
+    plt.title("Primeira Visita")
+    plt.xlabel("diminuição do tempo de espera de 15%" + "\n" + SOURCE_WT_FORMS + "\n"+ size_1st(anc) , fontsize=6)
     plt.xticks(fontsize=8)
     plt.yticks(fontsize=8)
     plt.ylabel("time in minutes", fontsize=8)
     plt.ylim([40,140])
 
     plt.subplot(1, 2, 2)
-
     sns.barplot(anc.query("consultation_reason == 2"), 
                 x="treatment_status", y="waiting_time",
                 palette=palette_anc, errwidth=0.5, capsize=0.1,
                 hue_order=order, errorbar=("se", 1.96))
-    plt.title("ANC: Followup")
+    #plt.title("ANC: Followup")
+    plt.title("Visitas Seguintes")
 
     SIZE_HIV = "n = 10708 (Control) 12091 (Treated)"
-    plt.xlabel(SOURCE_WT_FORMS + "\n"+ size_followup(anc) , fontsize=6)
+ #   plt.xlabel(SOURCE_WT_FORMS + "\n"+ size_followup(anc) , fontsize=6)
+    plt.xlabel("diminuição do tempo de espera de 16%" + "\n" +SOURCE_WT_FORMS + "\n"+ size_followup(anc) , fontsize=6)
 
     plt.xticks(fontsize=8)
     plt.yticks(fontsize=8)
@@ -192,6 +205,25 @@ def waiting_time_by_consultation_reason(anc):
     plt.ylim([40,140])
 
     plt.savefig(f"{img}/anc_wt_by_consultation_reason.jpeg", bbox_inches='tight',dpi=300)
+
+
+    SOURCE = "Source: intervention forms (exit interview)"
+    plt.figure(figsize=(10, 3))
+    plt.subplot(1, 2, 1)
+    sns.barplot(anc.query("consultation_reason == 1"), 
+                x="treatment_status", y="waiting_time",
+                palette=palette_anc, errwidth=0.5, capsize=0.1,
+                hue_order=order, errorbar=("se", 1.96))
+    # plt.title("ANC: 1st visits")
+    #plt.xlabel(SOURCE_WT_FORMS + "\n"+ size_1st(anc) , fontsize=6)
+    plt.title("Primeira Visita")
+    plt.xlabel("Aumento do número médio de procedimentos de 17%" + "\n" + SOURCE + "\n"+ "n = 874 (control) 1059 (treated)" , fontsize=8)
+    plt.savefig(f"{img}/temp.jpeg", bbox_inches='tight',dpi=300)
+
+    plt.xticks(fontsize=8)
+    plt.yticks(fontsize=8)
+    plt.ylabel("time in minutes", fontsize=8)
+    plt.ylim([40,140])
 
 
 def anc_het_wt_province(anc):
@@ -236,6 +268,30 @@ def anc_het_wt_province(anc):
     format_graph()
 
     plt.savefig(f"{img}/anc_wt_province.jpeg", bbox_inches='tight',dpi=300)
+
+
+# graph for the Apresentacao Marcacao Nov_2023
+def anc_het_wt_province_1(anc):
+    plt.figure(figsize=(10, 3))
+    plt.subplot(1, 2, 1)
+    province_order = ["Maputo \n Cidade", "Maputo \n Província",
+                    "Inhamb.", "Gaza"]
+
+    g = sns.barplot(anc.query("consultation_reason == 2"),
+                    x="waiting_time", y="province_label",
+                    order=province_order,
+                    hue="treatment_status",palette=palette_anc,
+                    hue_order=order,errwidth=0.5, capsize=0.1,
+                    errorbar=("ci",95))
+    plt.xlabel("Tempo em minutos" + "\n" + SOURCE_WT_FORMS + "/SARA \n" + size_followup(anc),
+            size=8)
+    sns.move_legend(g,loc='lower center', ncol=1, title="", frameon=False,
+                bbox_to_anchor=(0.85, 0))
+    plt.ylabel("")
+    format_graph()
+    plt.title("Tempo de Espera" ,fontsize=10)
+    plt.xlim([30,160])
+    plt.savefig(f"{img}/anc_wt_province_1.jpeg", bbox_inches='tight',dpi=300)
 
 
 
@@ -299,12 +355,40 @@ def anc_het_arrival_province(anc):
 
     plt.ylabel("")
     format_graph()
-    plt.title("ANC: Arrival time by province - follow-ups" ,fontsize=10)
+ #   plt.title("ANC: Arrival time by province - follow-ups" ,fontsize=10)
+    plt.title("Chegada por Provincia Tratamento vs Controlo" ,fontsize=10)
     sns.move_legend(g,loc='lower right', ncol=1, title="", frameon=True)
     plt.xlim([5,12])
     plt.savefig(f"{img}/anc_het_arrival_time_province.jpeg", bbox_inches='tight',dpi=300)
 
+def anc_arrival_time_density(anc):
+    plt.figure(figsize=(10, 3))
+    plt.subplot(1, 2, 1)
+    g = sns.kdeplot(anc.query("consultation_reason == 2"), fill=True,
+                    x="time_arrived_float",  common_norm=False,
+                    hue="treatment_status",palette=palette_anc)
+    plt.xlabel(SOURCE_WT_FORMS + " \n" + size_followup(anc), size=8)
+    sns.move_legend(g,loc='upper right', ncol=1, title="", frameon=False)
+    format_graph()
+    plt.title("Chegada" ,fontsize=10)
+#    plt.title("ANC: Arrival time (Follow-up)" ,fontsize=10)
+    sns.move_legend(g,loc='upper right', ncol=1, title="", frameon=True)
+    plt.xlim([5,12])
 
+    plt.subplot(1, 2, 2)
+
+    grouped_anc = (anc.query("consultation_reason == 2")
+                   .groupby(['facility_cod', 'day', 'treatment_status'])['time_arrived_float'].max()
+                   .reset_index())
+    g = sns.kdeplot(grouped_anc, fill=True,
+                    x="time_arrived_float",  common_norm=False,
+                    hue="treatment_status",palette=palette_anc)
+    plt.xlabel(SOURCE_WT_FORMS + " \n" + size_followup(anc), size=8)
+    #plt.xlabel(f"{SOURCE_WT_FORMS}\nn={counts['control']} (Control) {counts['treated']} (Treated)", size=8)
+    sns.move_legend(g,loc='upper right', ncol=1, title="", frameon=True)
+    plt.title("Ultima Consulta" ,fontsize=10)
+#    plt.title("ANC: Last consultation" ,fontsize=10)
+    plt.savefig(f"{img}/anc_arrival_time_dens.jpeg", bbox_inches='tight',dpi=300)
 
 def anc_het_wt_urban(anc, complier_df):
     followup = anc.query("consultation_reason == 2")
@@ -321,7 +405,8 @@ def anc_het_wt_urban(anc, complier_df):
                 hue="treatment_status",
                 palette=palette_anc,
                 hue_order=order,errwidth=0.5, capsize=0.1)
-    plt.title("CPN: Tempo de espera (Seguimento)" ,fontsize=10)
+#    plt.title("CPN: Tempo de espera (Seguimento)" ,fontsize=10)
+    plt.title("Tempo de espera" ,fontsize=10)
 
     plt.xlabel("Urban (SARA) \n" + SOURCE_WT_FORMS + "\n" + size_followup(anc), size=8)
     sns.move_legend(g, "lower center", ncol=2, title="", frameon=True)
@@ -336,7 +421,7 @@ def anc_het_wt_urban(anc, complier_df):
     order_urban = ["rural", "urbana"]
     sns.countplot(complier_df.query("treatment == 1"), x="urban_labeled", 
                 color=TREATED, order=order_urban, **dict(alpha=0.3))
-    ax = sns.countplot(complier_df.query("treatment == 1 & complier == 1"),
+    ax = sns.countplot(complier_df.query("treatment == 1 & complier_x == 1"),
                         x="urban_labeled", order=order_urban, color=TREATED)
     ax.text(0, 13.3, "50%", ha='center', weight='bold')
     ax.text(1, 13.3, "80%", ha='center',weight='bold')
@@ -605,6 +690,7 @@ def gen_anc_graphs():
     anc = pd.read_csv(anc_path)
 
     reg_book_full_path = f"{CLEANED_DATA_PATH}/anc_registry_book.csv"
+    reg_book_full_path = f"{CLEANED_DATA_PATH}/anc_registry_book.dta"
     reg_book = load_registry_book(reg_book_full_path, tc_df)
 
     path_hiv = "/Users/rafaelfrade/arquivos/desenv/lse/ocr_hiv"
@@ -620,6 +706,7 @@ def gen_anc_graphs():
     avg_consultations_per_patient(reg_book)
     anc_hiv_opening_hours(anc)
     waiting_time_by_consultation_reason(anc)
+    anc_arrival_time_density(anc)
     anc_het_wt_province(anc)
     anc_het_wt_vol(anc)
     anc_het_wt_urban(anc, complier_df)
