@@ -267,9 +267,10 @@ foreach var in time_arrived_float waiting_time more_than_3  before_7 {
 
 *** 2.2. OPENING TIME  ------------------------
 
-use "data/cleaned_data/opening_time.dta", clear
+use "data/cleaned_data/hiv_opening_time.dta", clear
 
-capture drop _merge
+drop if opening_time==0 // only one patient in that day
+drop if opening_time==-1
 
 preserve
     use "${DATA}cleaned_data/hiv_endline.dta", clear
@@ -288,20 +289,20 @@ label_vars_hiv
 
 sum opening_time, d
 /*
-                        opening_time
--------------------------------------------------------------
-      Percentiles      Smallest
- 1%           -8           -196
- 5%           17           -178
-10%           60           -115       Obs                 926
-25%          120            -61       Sum of wgt.         926
+                            opening_time
+    -------------------------------------------------------------
+        Percentiles      Smallest
+    1%           25              4
+    5%           95              5
+    10%          124              6       Obs                 915
+    25%          179              8       Sum of wgt.         915
 
-50%          188                      Mean           184.4611
-                        Largest       Std. dev.      95.22223
-75%          250            420
-90%          305            435       Variance       9067.274
-95%          340            435       Skewness      -.1505885
-99%          393            445       Kurtosis       2.989339
+    50%          247                      Mean           264.9005
+                            Largest       Std. dev.      134.0477
+    75%          317            790
+    90%          410            804       Variance       17968.77
+    95%          533            815       Skewness       1.408575
+    99%          733            819       Kurtosis       6.065537
 */
 
 global outcome_var opening_time

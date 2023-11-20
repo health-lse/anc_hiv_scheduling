@@ -15,11 +15,14 @@ save "data/aux/facility_characteristics.dta", replace
 
 
 set more off
-cd "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling"
-global anc_dataset "data/cleaned_data/anc_cpn_endline_v20230704.dta"
+global HOME 	"/Users/vincenzoalfano/LSE - Health/anc_hiv_scheduling/"
+global DATA     "${HOME}data/"
+
+global anc_dataset "${DATA}cleaned_data/anc_cpn_endline_v20230704.dta"
 use $anc_dataset, clear
 do do_files/anc_programs
 
+use "${DATA}cleaned_data/anc_cpn_endline_v20230704.dta", clear
 
 /* CONTROLS */
 gen_controls
@@ -170,3 +173,20 @@ ivreghdfe anc_followup c.quarter1 c.quarter2 c.quarter3 (complier c.complier##c.
 ivreghdfe $outcome c.post (complier10 c.complier10##c.post = treatment c.treatment##c.post)  $controls_vol , absorb(month ) cluster(facility_cod)
 
 
+/* WT - OPENING TIME */
+// updated on 17/11/2023
+use "${DATA}/cleaned_data/anc_opening_time.dta", clear
+
+drop if opening_time == 0 // only one patient in that facility-day
+
+merge m:1 facility_cod using "data/aux/facility_characteristics.dta"
+drop _merge
+label_vars_anc
+
+anc_reg opening_time , controls($controls) absorb(province day_of_week) filename("tables/opening_time.tex")
+
+anc_reg_het opening_time , controls($controls) absorb( day_of_week) filename("tables/opening_time_maputo_followup.tex") het_var(maputo)
+
+anc_reg_het opening_time , controls($controls_without_urban) absorb( province day_of_week) filename("tables/opening_time_urban_followup.tex") het_var(urban)
+
+anc_reg_het opening_time , controls($controls_without_quality) absorb( province day_of_week) filename("tables/opening_time_high_quality_followup.tex") het_var(high_quality)

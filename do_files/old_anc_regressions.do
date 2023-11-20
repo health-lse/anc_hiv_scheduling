@@ -153,8 +153,8 @@ anc_reg_het time_arrived_float , controls($controls_without_urban) absorb( provi
 
 
 /* WT - OPENING TIME */
-use "data/cleaned_data/opening_time.dta", clear
-capture drop _merge
+// updated on 17/11/2023
+use "${DATA}/cleaned_data/anc_opening_time.dta", clear
 
 merge m:1 facility_cod using "data/aux/facility_characteristics.dta"
 drop _merge

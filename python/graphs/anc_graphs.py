@@ -93,14 +93,14 @@ def patient_volume():
 
 def get_open_hours(df, arrival_time_col_name):
     open_h = (df.groupby(["facility", "day"])
-    .agg({arrival_time_col_name:["first", "last"],
+    .agg({arrival_time_col_name:["min", "max"],
         "facility":"first",
         "day":"first",
         "treatment_status":"first"})
     .reset_index())
 
-    open_h["open"] = open_h[arrival_time_col_name]["first"]
-    open_h["close"] = open_h[arrival_time_col_name]["last"]
+    open_h["open"] = open_h[arrival_time_col_name]["min"]
+    open_h["close"] = open_h[arrival_time_col_name]["max"]
     open_h["facility"] = open_h["facility"]
     open_h["day"] = open_h["day"]
 
@@ -593,20 +593,19 @@ SOURCE_REG = "Source: Facilities' registry book (Gov. of Mozambique)"
 
 SIZE_REG_BOOK = "n = 3389(Control) 3109 (Treated)"
 
-img = "graphs"
 
 def gen_anc_graphs():
-    ROOT = "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling/data"
+    ROOT = "/Users/vincenzoalfano/LSE - Health/anc_hiv_scheduling/data"
     CLEANED_DATA_PATH = f"{ROOT}/cleaned_data"
     AUX = f"{ROOT}/aux"
-
+    img =  "/Users/vincenzoalfano/LSE - Health/anc_hiv_scheduling/graphs"
     tc_df = load_tc_df(f"{AUX}/treatment_hdd.dta")
 
-    anc_path = f"{CLEANED_DATA_PATH}/anc_cpn_endline_v20230611.csv"
+    anc_path = f"{CLEANED_DATA_PATH}/anc_cpn_endline_v20230704.csv"
     anc = pd.read_csv(anc_path)
 
-    reg_book_path = f"{CLEANED_DATA_PATH}/anc_registry_book.csv"
-    reg_book = load_registry_book(reg_book_path, tc_df)
+    reg_book_full_path = f"{CLEANED_DATA_PATH}/anc_registry_book.csv"
+    reg_book = load_registry_book(reg_book_full_path, tc_df)
 
     path_hiv = "/Users/rafaelfrade/arquivos/desenv/lse/ocr_hiv"
     #hiv_endline = load_hiv_endline(f"{path_hiv}/hiv_endline_cleaned.csv")

@@ -129,7 +129,7 @@ def create_panels():
         reads the dataset with pickups and transform it into the panel format
     """
     # change path to your local path
-    path_to_data_folder = f"/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling"
+    path_to_data_folder = f"/Users/vincenzoalfano/LSE - Health/anc_hiv_scheduling/"
     path_cleaned_data = f"{path_to_data_folder}/data/cleaned_data/mozart"
 
     treat_df = pd.read_stata(f"{path_to_data_folder}/data/aux/treatment_hdd.dta")
