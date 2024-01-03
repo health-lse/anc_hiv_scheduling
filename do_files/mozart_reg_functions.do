@@ -11,6 +11,7 @@ program gen_controls
 	global controls_facility index_hiv_care_readiness art_different_lines art_general hand_wash dayaverage urban cd4 score_basic_amenities score_basic_equipment hiv_diagnostic_capacity index_general_service
 
 	global controls index_hiv_care_readiness art_different_lines art_general hand_wash dayaverage urban cd4 score_basic_amenities score_basic_equipment hiv_diagnostic_capacity index_general_service $controls_patient 
+	global controls index_hiv_care_readiness art_different_lines art_general hand_wash dayaverage urban score_basic_amenities score_basic_equipment hiv_diagnostic_capacity index_general_service $controls_patient 
 
 	di "controls generated"
 end
@@ -112,26 +113,49 @@ end
 // Function with regressions for the panel with old patients. Includes a treatment#post interaction.	
 capture program drop mozart_old_reg
 program mozart_old_reg
-	syntax varlist(max=1) [if] [ , filename(string) controls(namelist) ]
+	syntax varlist(max=1) [if] [ , absorb(namelist)  filename(string) controls(namelist) ]
 	preserve
 	if `"`if'"' != "" {
 		keep `if'
 	}
 
+	tokenize `varlist'
 	global outcome `1'
 	local controls `namelist'
+	global fixed_effects "`absorb'"
+
 
 	eststo clear
 	estimates clear
 
-	reghdfe $outcome c.treatment##c.post, a( province ) vce(cl facility_cod)
-	estimates store model1
+	reghdfe $outcome c.treatment##c.post, a( $fixed_effects ) vce(cl facility_cod)
+	qui estimates store model1, title("OLS")
 
+	reghdfe $outcome c.treatment##c.post $controls, a( $fixed_effects)  vce(cl facility_cod)
+	qui estimates store model2, title("OLS")
 
-	reghdfe $outcome c.treatment##c.post $controls, a( province)  vce(cl facility_cod)
-	estimates store model2
+	rename treatment treatment_iv
+	rename complier treatment
+	qui ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post), absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model3, title("IV")
 
-	estfe . model*, labels(province "Province FE" district "District FE" )
+	qui ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post) $controls_reg, absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model4, title("IV")
+	
+
+	drop treatment
+	rename complier_next treatment
+	qui ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post), absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model5, title("IV (next) ")
+
+	qui ivreghdfe $outcome c.post (treatment c.treatment##c.post = treatment_iv c.treatment_iv##c.post) $controls_reg, absorb($fixed_effects) cluster(facility_cod)
+	add_scalars_hiv
+	qui estimates store model6, title("IV (next) ")
+
+	estfe . model*, labels(province "Province FE")
 		
 	esttab model*  using "`filename'", style(tex) stats(r2 N) star(* 0.10 ** 0.05 *** 0.01) indicate("Controls=$controls" `r(indicate_fe)') se replace
 	estfe . model*, restore
@@ -238,5 +262,3 @@ program mozart_reg_het
 
 	restore
 end
-
-

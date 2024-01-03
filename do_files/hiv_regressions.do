@@ -207,6 +207,22 @@ drop if flag_m_consultation_time
 replace waiting_time = new_wait
 drop new_wait _m *2 flag_*
 
+* Clean the self_reported waiting_time variable
+timestr_to_float waiting_time_sr, varname("waiting_time_sr_float")
+gen waiting_time_selfr =  round(waiting_time_sr_float*60,1)
+replace waiting_time_selfr = waiting_time_sr if waiting_time_sr<100
+drop waiting_time_sr_float 
+
+* replace misread self reported waiting time with the one we compute
+replace waiting_time_selfr=waiting_time if waiting_time_selfr==0
+replace waiting_time_selfr=waiting_time if waiting_time_selfr>500
+replace waiting_time_selfr=waiting_time if facility_cod==22 
+replace waiting_time_selfr=waiting_time if file_name=="endline_US24_day5_page4.txt"
+replace waiting_time_selfr=waiting_time if file_name=="endline_US26_day6_page6.txt"
+
+sum waiting_time_selfr if waiting_time > 120, d
+
+
 *** 1.3. Flag observations  ------------------------
 gen before_7 = (arrival_time <= 700)
 gen more_than_3 = (waiting_time >= 180) if !missing(waiting_time)
@@ -236,7 +252,9 @@ gen_controls
 * drop outliers (above 99%) 
 sum waiting_time, d
 *keep if waiting_time <  r(p95) | missing(waiting_time)
+drop if waiting_time==-1
 keep if waiting_time <  r(p99)
+sum waiting_time_selfr, d
 
 * should we drop outliers in time_arrived_float as well?
 sum time_arrived_float, d
@@ -259,7 +277,7 @@ keep if time_arrived_float <  r(p99)
     99%        14.03          15.45       Kurtosis       2.914319
 */
 
-foreach var in time_arrived_float waiting_time more_than_3  before_7 {
+foreach var in time_arrived_float waiting_time waiting_time_selfr more_than_3  before_7 {
 
     global outcome_var `var'
     hiv_group_reg $outcome_var , suffix("hiv")
@@ -440,13 +458,24 @@ keep if waiting_time <  r(p99)
 gen_controls
 label_vars_hiv
 
-global outcome waiting_time
+* add the baseline waiting_time to the selfreported waiting time variable as well
+replace waiting_time_selfr = waiting_time if post==0
+
+global outcome waiting_time_selfr
 global absorb province
 local suffix "hiv_did"
 
+
+hiv_did waiting_time_selfr , controls($controls) absorb($absorb) filename("tables/$outcome_`suffix'.tex")
+hiv_did_het waiting_time_selfr , controls($controls) absorb() filename("tables/$outcome_maputo_`suffix'.tex") het_var(maputo)
+
+global outcome waiting_time
+
 hiv_did $outcome , controls($controls) absorb($absorb) filename("tables/$outcome_`suffix'.tex")
 
-hiv_did_het $outcome , controls($controls) absorb($province) filename("tables/$outcome_maputo_`suffix'.tex") het_var(maputo)
+hiv_did_het $outcome , controls($controls) absorb() filename("tables/$outcome_maputo_`suffix'.tex") het_var(maputo)
+
+hiv_did_het $outcome , controls($controls) absorb($absorb) filename("tables/$outcome_maputo_`suffix'.tex") het_var(maputo)
 
 hiv_did_het $outcome , controls($controls_without_urban) absorb($absorb) filename("tables/$outcome_urban_`suffix'.tex") het_var(urban)
 

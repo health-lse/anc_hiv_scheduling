@@ -221,6 +221,8 @@ def find_times_df_1_table(response_df):
     response_df.loc[response_df["col_4"] != "",
                     "consultation_time"] = response_df["col_5_clean"]
     response_df.loc[response_df["col_4"] != "",
+                    "waiting_time_sr"] = response_df["col_6_clean"]   
+    response_df.loc[response_df["col_4"] != "",
                     "scheduled_time"] = response_df["col_7_clean"] 
     response_df.loc[response_df["col_4"] != "",
                     "next_scheduled_time"] = response_df["col_8"] 
@@ -231,6 +233,9 @@ def find_times_df_1_table(response_df):
     response_df.loc[(response_df["col_4_clean"] == "") &
                     (response_df["col_5_clean"] != ""),
                         "consultation_time"] = response_df["col_6_clean"]
+    response_df.loc[(response_df["col_4_clean"] == "") &
+                    (response_df["col_5_clean"] != ""),
+                        "waiting_time_sr"] = response_df["col_7_clean"] 
     response_df.loc[(response_df["col_4_clean"] == "") &
                     (response_df["col_5_clean"] != ""),
                         "scheduled_time"] = response_df["col_8_clean"] 
@@ -249,6 +254,10 @@ def find_times_df_1_table(response_df):
     response_df.loc[ (response_df["col_4_clean"] == "") & 
                      (response_df["col_5_clean"] == "") & \
                      (response_df["col_6_clean"] != ""), \
+                             "waiting_time_sr"] = response_df["col_8_clean"]
+    response_df.loc[ (response_df["col_4_clean"] == "") & 
+                     (response_df["col_5_clean"] == "") & \
+                     (response_df["col_6_clean"] != ""), \
                              "scheduled_time"] = response_df["col_9_clean"] 
     response_df.loc[ (response_df["col_4_clean"] == "") & 
                      (response_df["col_5_clean"] == "") & \
@@ -263,6 +272,9 @@ def find_times_df_1_table(response_df):
                                         "consultation_time"] = response_df["col_6_clean"]
     response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
                      (response_df["col_5_clean"] != ""),
+                                        "waiting_time_sr"] = response_df["col_7_clean"] 
+    response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
+                     (response_df["col_5_clean"] != ""),
                                         "scheduled_time"] = response_df["col_8_clean"] 
     response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
                      (response_df["col_5_clean"] != ""),
@@ -274,6 +286,9 @@ def find_times_df_1_table(response_df):
     response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
                      (response_df["col_5_clean"] == ""),
                                         "consultation_time"] = response_df["col_7_clean"]
+    response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
+                     (response_df["col_5_clean"] == ""),
+                                        "waiting_time_sr"] = response_df["col_8_clean"] 
     response_df.loc[ (response_df["col_4_clean"].str.contains("SELECTED")) & 
                      (response_df["col_5_clean"] == ""),
                                         "scheduled_time"] = response_df["col_9_clean"] 
@@ -300,6 +315,7 @@ def find_times_df_2_tables(response_df):
 
     response_df.loc[response_df["col_0_clean"] != "", "arrival_time"] = response_df["col_0_clean"]
     response_df.loc[response_df["col_0_clean"] != "","consultation_time"] = response_df["col_1_clean"] 
+    response_df.loc[response_df["col_0_clean"] != "","waiting_time_sr"] = response_df["col_2_clean"] 
     response_df.loc[response_df["col_0_clean"] != "","scheduled_time"] = response_df["col_3_clean"] 
     response_df.loc[response_df["col_0_clean"] != "","next_scheduled_time"] = response_df["col_4_clean"] 
 
@@ -307,6 +323,8 @@ def find_times_df_2_tables(response_df):
                     (response_df["col_1_clean"] != ""), "arrival_time"] = response_df["col_1_clean"]
     response_df.loc[(response_df["col_0_clean"] == "") &
                     (response_df["col_1_clean"] != ""),"consultation_time"] = response_df["col_2_clean"]
+    response_df.loc[(response_df["col_0_clean"] == "") &
+                    (response_df["col_1_clean"] != ""),"waiting_time_sr"] = response_df["col_3_clean"]
     response_df.loc[(response_df["col_0_clean"] == "") &
                     (response_df["col_1_clean"] != ""),"scheduled_time"] = response_df["col_4_clean"] 
     response_df.loc[(response_df["col_0_clean"] == "") &
@@ -320,6 +338,10 @@ def find_times_df_2_tables(response_df):
                      (response_df["col_1_clean"] == "") & \
                      (response_df["col_2_clean"] != ""), \
                              "consultation_time"] = response_df["col_3_clean"]
+    response_df.loc[ (response_df["col_0_clean"] == "") & 
+                     (response_df["col_1_clean"] == "") & \
+                     (response_df["col_2_clean"] != ""), \
+                             "waiting_time_sr"] = response_df["col_4_clean"]
     response_df.loc[ (response_df["col_0_clean"] == "") & 
                      (response_df["col_1_clean"] == "") & \
                      (response_df["col_2_clean"] != ""), \
@@ -346,6 +368,9 @@ def flag_incorrect_obs(response_df):
     response_df["consultation_time_cleaned"] = remove_special_characters(
             response_df["consultation_time"]).apply(misread_h)
 
+    response_df["waiting_time_sr_cleaned"] = remove_special_characters(
+            response_df["waiting_time_sr"]).apply(misread_h)
+
     ## SCHEDULED_TIME
     # hour range cleans observations where scheduled time takes the form of an hour range (e.g. 8H9H), returning the midpoint
     response_df["scheduled_time_cleaned"] = remove_special_characters(response_df["scheduled_time"]).str.replace("#", "H").str.replace("h", "H")
@@ -366,6 +391,7 @@ def flag_incorrect_obs(response_df):
 
     response_df["arrival_time_cleaned"] = response_df["arrival_time_cleaned"].apply(clean_time_with_h)
     response_df["consultation_time_cleaned"] = response_df["consultation_time_cleaned"].apply(clean_time_with_h)
+    response_df["waiting_time_sr_cleaned"] = response_df["waiting_time_sr_cleaned"].apply(clean_time_with_h)
     response_df["scheduled_time_cleaned"] = response_df["scheduled_time_cleaned"].astype(str).apply(clean_time_with_h)
 
     response_df['arrival_time_numeric'] = pd.to_numeric(
@@ -378,6 +404,12 @@ def flag_incorrect_obs(response_df):
                                             response_df['consultation_time_cleaned'],
                                             errors='coerce')
     response_df.loc[~response_df['consultation_time_numeric'].notnull(), "flag"] = 1
+
+    response_df['waiting_time_sr_numeric'] = pd.to_numeric(
+                                            response_df['waiting_time_sr_cleaned'],
+                                            errors='coerce')
+    response_df.loc[~response_df['waiting_time_sr_numeric'].notnull(), "flag"] = 1
+
 
     response_df['scheduled_time_numeric'] = pd.to_numeric(
                                             response_df['scheduled_time_cleaned'],
@@ -482,6 +514,8 @@ def load_hiv_endline(hiv_end_df):
                                             .fillna(0).astype(int))
     hiv_cleaned_numeric["consultation_time"] = (hiv_cleaned_numeric["consultation_time_numeric"]
                                             .fillna(0).astype(int))
+    hiv_cleaned_numeric["waiting_time_sr"] = (hiv_cleaned_numeric["waiting_time_sr_numeric"]
+                                            .fillna(0).astype(int))
     hiv_cleaned_numeric["scheduled_time"] = (hiv_cleaned_numeric["scheduled_time_numeric"]
                                             .fillna(0).astype(int))
     
@@ -495,7 +529,7 @@ def load_hiv_endline(hiv_end_df):
     hiv_cleaned_numeric["line"] = (hiv_cleaned_numeric["line"].astype(int))
 
     hiv_cleaned_numeric = hiv_cleaned_numeric[["file_name", "facility", "day", "day_of_week", 
-                                               "page", "line", "arrival_time","consultation_time", 
+                                               "page", "line", "arrival_time","consultation_time", "waiting_time_sr",
                                                "scheduled_time", "next_scheduled_time", "time_arrived_float",
                                                "consultation_time_float", "scheduled_time_float", 
                                                "treatment", "waiting_time", "flag", "empty"]]

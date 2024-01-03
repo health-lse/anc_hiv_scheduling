@@ -187,6 +187,7 @@ def waiting_time_by_consultation_reason(anc):
     plt.ylabel("time in minutes", fontsize=8)
     plt.ylim([40,140])
 
+
     plt.subplot(1, 2, 2)
     sns.barplot(anc.query("consultation_reason == 2"), 
                 x="treatment_status", y="waiting_time",
