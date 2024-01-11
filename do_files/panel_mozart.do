@@ -353,9 +353,14 @@ drop temp*
 
 destring pac_age, replace
 
+* count the number of pickups after the intervention
+bys nid (pickup_date): gen npickups_after = trip_counter[_N] + 1
+
+
+
 collapse pac_age dups trip_counter (sum) npills_pickedup_m=trv_quantity_taken (last) old_patient new_patient month_pickup1 months_from_intervention ///
         pick30_5months pick_5months pick30_8months pick_8months pick_8range pick30_8range maputo day_pickup1 mpr days_without_med ///
-        trips_from_intervention losstofollowup intervention_date pac_sex npickups trip_first_interv date_last_visit stopped_before_intervention, ///
+        trips_from_intervention losstofollowup intervention_date pac_sex npickups trip_first_interv date_last_visit stopped_before_intervention npickups_after, ///
     by(nid pickup_month facility_cod facility_name)
 
 label var npills_pickedup_m             "NUmber of pills picked per month"
@@ -369,8 +374,11 @@ label var pick30_8months                "30 pills in all the pickups in the 10 m
 label var trip_counter                  "trips from first trip after intervention"
 label var npickups                      "no of pickups done by a patient"
 label var trip_first_interv             "Number of the first pickup after the intervention"
-label var date_last_visit               "Date of the alst pickup"
+label var date_last_visit               "Date of the last pickup"
 label var stopped_before_intervention   "No pickup after the intervention for the patient"
+label var npickups_after                "No of pickups after the intervention"
+
+
 
 merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", keepusing(treat) nogen 
 gen treatment_status = cond(treatment==0,"control", "treatment") 
@@ -812,6 +820,8 @@ merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", nogen
 // function to generate controls
 gen_controls
 
+drop if npickups_after==1
+
 gen delay_7 = days_without_med >= 7
 gen mpr_95 = mpr > 0.95
 
@@ -843,6 +853,9 @@ merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", nogen
 // function to generate controls
 gen_controls
 
+* drop patients that only do one pickup after the intervention
+drop if npickups_after==1
+
 gen delay_7 = days_without_med >= 7
 gen mpr_95 = mpr > 0.95
 
@@ -873,6 +886,9 @@ use "${DATA}cleaned_data/panel_new_all_updated.dta", clear
 
 merge m:1 facility_cod using "${DATA}cleaned_data/hiv_complier_facilities.dta", nogen 
 merge m:1 facility_cod using "${DATA}aux/facility_characteristics.dta", nogen 
+
+* drop patients that only do one pickup after the intervention
+drop if npickups_after==1
 
 gen_controls
 gen mpr_95 = mpr > 0.95
@@ -907,6 +923,9 @@ gen mpr_95 = mpr > 0.95
 
 label_vars_hiv
 drop if pickup_month==ym(2021,9)
+
+* drop patients that only do one pickup after the intervention
+drop if npickups_after==1
 
 local names " "days" "mpr" "mpr_95" "delay_7" "
 local i = 1
