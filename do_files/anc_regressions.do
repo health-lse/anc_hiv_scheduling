@@ -19,8 +19,8 @@ global HOME 	"/Users/vincenzoalfano/LSE - Health/anc_hiv_scheduling/"
 global DATA     "${HOME}data/"
 
 global anc_dataset "${DATA}cleaned_data/anc_cpn_endline_v20230704.dta"
-use $anc_dataset, clear
-do do_files/anc_programs
+use "$anc_dataset", clear
+do "${HOME}/do_files/anc_programs.do"
 
 use "${DATA}cleaned_data/anc_cpn_endline_v20230704.dta", clear
 
@@ -35,7 +35,7 @@ foreach x in waiting_time  more_than_3  before_7 time_arrived_float  {
 	anc_group_reg $outcome_var , suffix("1st")
 }
 
-use $anc_dataset, clear
+use "$anc_dataset", clear
 
 keep if consultation_reason == 2
 keep if waiting_time < 249 // remove outliers 5% - followups
@@ -47,7 +47,7 @@ foreach x in waiting_time  more_than_3  before_7 time_arrived_float  {
 
 
 /* STANDARD DEVIATION OF THE WAITING TIME */
-use $anc_dataset, clear
+use "$anc_dataset", clear
 keep if consultation_reason == 1
 collapse (sd) waiting_time  (first) treatment consultation_reason province day_of_week complier complier10 maputo gaza_inhambane high_quality $controls, by (facility_cod day)
 
@@ -56,7 +56,7 @@ rename waiting_time std_waiting_time
 
 anc_group_reg std_waiting_time , suffix("1st")
 
-use $anc_dataset, clear
+use "$anc_dataset", clear
 
 keep if consultation_reason == 2
 collapse (sd) waiting_time  (first) treatment consultation_reason province day_of_week complier complier10 maputo gaza_inhambane high_quality $controls, by (facility_cod day)
@@ -72,11 +72,10 @@ anc_group_reg std_waiting_time , suffix("followup")
 
 /* OPENING TIME */
 
-use "data/cleaned_data/opening_time.dta", clear
+use "${DATA}/cleaned_data/opening_time.dta", clear
 capture drop _merge
-label_vars_anc
 
-merge m:1 facility_cod using "data/aux/facility_characteristics.dta"
+merge m:1 facility_cod using "$DATA/aux/facility_characteristics.dta"
 drop _merge
 label_vars_anc
 
@@ -84,22 +83,47 @@ anc_group_reg opening_time , suffix("")
 
 
 /* REGISTRY BOOK: NUMBER OF VISITS */
-cd "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling"
-use data/cleaned_data/anc_registry_book.dta, clear
+cd "$HOME"
+use "${DATA}/cleaned_data/anc_registry_book.dta", clear
 label_vars_anc
 
 gen number_of_visits = anc_total
 label var number_of_visits "Number of visits"
 
+
+gen_controls 
+mdesc $controls volume_base_total 
+tab facility_cod if missing(index_general_service ) | missing(volume_base_total), m
+// two facility codes (36 and 54) have all the observations missing for the control variables.
+
+** regression adjustment approach to fill in missing values:
+gen miss_control1 = missing(index_general_service) if !missing(facility_cod)
+gen miss_control2 = missing(volume_base_total) if !missing(facility_cod)
+
+qui sum volume_base_total
+replace volume_base_total =  r(mean) if miss_control2 == 1
+
+foreach var in score_basic_amenities  score_basic_equipment index_general_service index_anc_readiness {
+	qui sum `var'
+	replace `var' =  r(mean) if miss_control1 == 1
+}
+
+* add the two missing dummies as controls:
+global controls $controls miss_control1 miss_control2 gestational_age_1st
+global controls_without_urban $controls_without_urban miss_control1 miss_control2 gestational_age_1st
+global controls_without_quality $controls_without_quality miss_control1 miss_control2 gestational_age_1st
+
 anc_group_reg_custom_fe number_of_visits , suffix("") absorb(province month_1st) absorb_maputo_reg(month_1st)
 
 
 
+
+
 /* EXIT INTERVIEW: PROCEDURES */
-use "data/cleaned_data/anc_exit_interview_cleaned.dta", clear
+use "${DATA}/cleaned_data/anc_exit_interview_cleaned.dta", clear
 
 
-merge m:1 facility_cod using  "data/aux/facility_characteristics.dta"
+merge m:1 facility_cod using  "${DATA}/aux/facility_characteristics.dta"
 drop _merge
 label_vars_anc
 
@@ -109,17 +133,49 @@ egen proc_index = rowmean(HIV_test syphilis_test malaria_test malaria_pills mala
 egen proc_index_1st = rowmean(HIV_test syphilis_test  malaria_net  blood_test urine  height  ask_history  estimated)
 egen proc_index_followup = rowmean(  malaria_test malaria_pills  tetanus blood_pressure  weight examine_belly uterine_height folic_acid  delivery_place delivery_plan estimated  complications_sign nutrition questions)
 
+
 * controls
 
 //global controls_facility volume_base_total  urban  score_basic_amenities score_basic_equipment  index_general_service index_ANC_readiness      
+gen_controls
 
-global controls_patient demog_age read_and_write educ_high_school married demog_kids demog_hh_kids_under5
+global controls_patient demog_age read_and_write educ_high_school married demog_kids demog_hh_kids_under5 
 
 global controls $controls $controls_patient
 global controls_without_urban $controls_without_urban $controls_patient
 global controls_without_quality $controls_without_quality $controls_patient
 
+
+* check missing values
+mdesc $controls  
+tab facility_cod if missing(index_general_service ) | missing(volume_base_total), m
+// two facility codes (36 and 54) have all the observations missing for the control variables.
+
+** regression adjustment approach to fill in missing values:
+gen miss_control1 = missing(index_general_service) if !missing(facility_cod)
+gen miss_control2 = missing(volume_base_total) if !missing(facility_cod)
+
+qui sum volume_base_total
+replace volume_base_total =  r(mean) if miss_control2 == 1
+
+foreach var in score_basic_amenities  score_basic_equipment index_general_service index_anc_readiness {
+	qui sum `var'
+	replace `var' =  r(mean) if miss_control1 == 1
+}
+
+gen_controls
+
+global controls $controls $controls_patient  miss_control1 miss_control2 
+global controls_without_urban $controls_without_urban $controls_patient  miss_control1 miss_control2 
+global controls_without_quality $controls_without_quality $controls_patient  miss_control1 miss_control2 
+
+
 anc_group_reg proc_index_followup if anc_total == 1, suffix("on_1st_patients")
+
+
+global controls score_basic_amenities   index_anc_readiness  index_general_service urban hospital  miss_control1 miss_control2 volume_base_total
+
+* without volume_base_total all columns are significant
 
 /*
 foreach v in proc_index proc_index_1st proc_index_followup {
@@ -132,7 +188,7 @@ foreach v in proc_index proc_index_1st proc_index_followup {
 /* PATIENTS WAITING */
 import delimited data/cleaned_data/patients_waiting.csv, clear
 
-merge m:1 facility_cod using  "data/aux/facility_characteristics.dta"
+merge m:1 facility_cod using  "${DATA}/aux/facility_characteristics.dta"
 drop _merge
 label_vars_anc
 gen_controls
@@ -144,12 +200,12 @@ anc_group_reg n_waiting_10 , suffix("")
 /* VOLUME */
 
 set more off
-cd "/Users/rafaelfrade/arquivos/desenv/lse/anc_hiv_scheduling"
-use "data/cleaned_data/sisma_volume.dta", clear
+cd "$HOME"
+use "${DATA}/cleaned_data/sisma_volume.dta", clear
 
 
 drop _merge
-merge m:1 facility_cod using "data/aux/facility_characteristics.dta", keepusing (complier complier10)
+merge m:1 facility_cod using "${DATA}/aux/facility_characteristics.dta", keepusing (complier complier10)
 drop _merge
 
 replace quarter2 = 1 if quarter2 == 2
@@ -179,7 +235,7 @@ use "${DATA}/cleaned_data/anc_opening_time.dta", clear
 
 drop if opening_time == 0 // only one patient in that facility-day
 
-merge m:1 facility_cod using "data/aux/facility_characteristics.dta"
+merge m:1 facility_cod using "${DATA}/aux/facility_characteristics.dta"
 drop _merge
 label_vars_anc
 
